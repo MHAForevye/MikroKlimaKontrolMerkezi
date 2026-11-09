@@ -1,0 +1,10 @@
+{
+  "name": "mikro-klima-kontrol-merkezi",
+  "private": true,
+  "scripts": {
+    "bump": "node bump-version.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node bump-version.mjs --check && node --test tests/*.test.mjs",
+    "deploy": "node bump-version.mjs && node --test tests/*.test.mjs && npx wrangler deploy"
+  }
+}

@@ -28,13 +28,14 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Mikro-Klima">
-  <script>(function(){var t=null;try{t=localStorage.getItem("mk_theme")}catch(e){}if(!t)t=(window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light";document.documentElement.setAttribute("data-theme",t);var k=null;try{k=localStorage.getItem("mk_skin")}catch(e){}document.documentElement.setAttribute("data-skin",k==="pastel"?"pastel":"classic");})();</script>
+  <script src="js/theme.js?v=368b16f2"></script>
   
-  <link rel="stylesheet" href="css/fonts.css"><link rel="stylesheet" href="css/style.css?v=kristal-2"><link rel="stylesheet" href="css/classic.css">
+  <link rel="stylesheet" href="css/fonts.css?v=f1b34a86"><link rel="stylesheet" href="css/style.css?v=f15697ec"><link rel="stylesheet" href="css/classic.css?v=222beb74"><link rel="stylesheet" href="css/sade.css?v=746e927a">
   <script src="lib/chart.umd.min.js"></script>
 <script data-goatcounter="https://havadurumu.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
 </head>
 <body>
+<a class="skip-link" href="#main">İçeriğe geç</a>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><filter id="wob" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="3" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.6"/></filter><filter id="paint" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" seed="5" result="w"/><feDisplacementMap in="SourceGraphic" in2="w" scale="3.4" result="d"/><feTurbulence type="fractalNoise" baseFrequency="0.4" numOctaves="1" seed="2" result="g"/><feColorMatrix in="g" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1 1.45" result="ga"/><feComposite in="d" in2="ga" operator="in"/></filter></defs></svg>
 
 <div class="container">
@@ -42,7 +43,7 @@
     <div class="topbar-row">
       <h1><span class="ico" data-ico="sun" style="--s:28px"></span>Mikro-Klima Kontrol Merkezi</h1>
       <div class="top-actions">
-        <button id="btnShare" class="icon-btn" aria-label="Konumu ve saati paylaş" title="Bu görünümü paylaş" onclick="shareCurrentView()"><span style="font-size:18px">🔗</span></button>
+        <button id="btnShare" class="icon-btn" aria-label="Konumu ve saati paylaş" title="Bu görünümü paylaş" data-act="shareCurrentView"><span style="font-size:18px">🔗</span></button>
         <button id="btnFaq" class="icon-btn" aria-label="Sık sorulan sorular" title="Sık sorulan sorular"><span class="ico" data-ico="faq" style="--s:28px"></span></button>
         <button id="btnRefresh" class="icon-btn" aria-label="Verileri yenile" title="Yenile"><span class="ico" data-ico="refresh" style="--s:22px"></span></button>
       </div>
@@ -53,7 +54,7 @@
     </div>
   </header>
 
-  <main>
+  <main id="main" tabindex="-1">
     <!-- SEKME 1: TAHMİN -->
     <section class="panel active" id="panel-today" role="tabpanel" aria-labelledby="tab-today">
       <div id="sharedHeading" class="shared-heading" hidden>
@@ -70,17 +71,18 @@
           <div class="hero-temp" id="heroTemp">--°</div>
           <div class="hero-side"><div id="heroDesc">Yükleniyor…</div><div id="heroFeels"></div><div id="heroHiLo"></div></div>
         </div>
+        <div class="sade-line" id="sadeLine" aria-live="polite"></div>
         <div class="hero-stats" id="heroStats"></div>
       </div>
 
 
       <div id="selBlock" style="display:contents">
       <div class="mode-switch wide">
-        <button type="button" class="mode-btn active" id="modeHourly" onclick="setMode('hourly')">
+        <button type="button" class="mode-btn active" id="modeHourly" data-act="setMode" data-arg="hourly">
           <span class="ico" data-ico="clock" style="--s:18px"></span>
           Saatlik
         </button>
-        <button type="button" class="mode-btn" id="modeDaily" onclick="setMode('daily')">
+        <button type="button" class="mode-btn" id="modeDaily" data-act="setMode" data-arg="daily">
           <span class="ico" data-ico="calendar" style="--s:18px"></span>
           7 Günlük
         </button>
@@ -103,7 +105,7 @@
       </div>
       <a id="sharedHomeLink" href="./" hidden>Asıl siteye git →</a>
 
-      <button type="button" class="setting-btn wide" onclick="showTab('detail')">Detaylandır: mikro-klima skoru, yağış grafikleri, radar →</button>
+      <button type="button" class="setting-btn wide" data-act="showTab" data-arg="detail"><span id="detailMoreTxt">Detaylandır: mikro-klima skoru, yağış grafikleri, radar →</span></button>
     </section>
 
     <!-- SEKME 2: DETAY -->
@@ -138,14 +140,14 @@
 
       <div class="card wide" id="radarCard">
         <div class="src-head"><span class="ico" data-ico="umbrella" style="--s:22px"></span><b>Yağış radarı</b><span id="radarMsg" style="margin-left:auto;font-size:.85rem;font-weight:700"></span></div>
-        <button type="button" class="setting-btn" id="radarBtn" onclick="radarOpen()">Radarı aç</button>
+        <button type="button" class="setting-btn" id="radarBtn" data-act="radarOpen">Radarı aç</button>
         <div id="radarMap"></div>
-        <div id="radarCtl" hidden><button type="button" class="setting-btn" id="radarPlay" onclick="radarToggle()">⏸</button><input type="range" id="radarSlide" min="0" value="0" aria-label="Radar zamanı"><span id="radarTime"></span></div>
+        <div id="radarCtl" hidden><button type="button" class="setting-btn" id="radarPlay" data-act="radarToggle">⏸</button><input type="range" id="radarSlide" min="0" value="0" aria-label="Radar zamanı"><span id="radarTime"></span></div>
         <div class="src-stats">Son 2 saatin radar görüntüsü (RainViewer), yaklaşık 10 dakikada bir yenilenir. Gelecek tahmini içermez. Radar kapsamı dışındaki yerler boş görünür.</div>
       </div>
 
       <div class="card wide" id="rtCard">
-        <div class="src-head"><span class="ico" data-ico="clock" style="--s:22px"></span><b>Yağış ne zaman başlar, biter?</b><button type="button" class="setting-btn" style="margin-left:auto" onclick="rtLoad(true)">Yenile</button></div>
+        <div class="src-head"><span class="ico" data-ico="clock" style="--s:22px"></span><b>Yağış ne zaman başlar, biter?</b><button type="button" class="setting-btn" style="margin-left:auto" data-act="rtLoad">Yenile</button></div>
         <div id="rtBody" class="src-stats">yükleniyor…</div>
       </div>
 
@@ -158,14 +160,14 @@
         <button class="info-btn abs" data-info="chart" aria-label="Bilgi"><span class="ico" data-ico="info" style="--s:24px"></span></button>
         <h3 style="margin-top: 0; color: var(--subtext);" id="chartTitle">ZAMAN EKSENİNDE YAĞIŞ VE SKOR (0-10)</h3>
         <div style="height: 260px;">
-          <canvas id="weatherChart"></canvas>
+          <canvas id="weatherChart" role="img" aria-label="Zaman ekseninde yağış ve skor grafiği. Aynı bilgi saatlik listede metin olarak da var."></canvas>
         </div>
       </div>
 
       <div class="card" id="metricCard">
         <div class="src-head"><span class="ico" data-ico="wind" style="--s:22px"></span><b>Ölçüm grafiği</b></div>
         <div class="chip-row" id="metricChips"></div>
-        <div style="height: 230px;"><canvas id="metricChart"></canvas></div>
+        <div style="height: 230px;"><canvas id="metricChart" role="img" aria-label="Seçili ölçümün zaman grafiği"></canvas></div>
         <div class="src-stats" id="metricNote"></div>
       </div>
 
@@ -204,11 +206,11 @@
         <div class="src-stats">Sayfa açıkken saatte bir, modellerin 6 ve 24 saat sonrası için tahminleri bu cihaza kaydedilir. Zamanı gelince gerçekleşenle kıyaslanır. Hata, sapma ve yağış başarısı birikir, ağırlıklar ve sıcaklık düzeltmesi buna göre ayarlanır. Veri sadece bu tarayıcıda durur; tarayıcı site verisini temizlerse silinir, bu yüzden arada "Dışa aktar" ile yedek al.</div>
         <div id="memBox"></div>
         <div class="mem-btns">
-          <button type="button" class="setting-btn" onclick="memToggle()">Ağırlıklara uygula<span class="state" id="memSw"></span></button>
-          <button type="button" class="setting-btn" onclick="memExport()">Dışa aktar (yedek)</button>
-          <button type="button" class="setting-btn" onclick="$('memFile').click()">İçe aktar</button>
-          <button type="button" class="setting-btn" onclick="memReset()">Belleği sıfırla</button>
-          <input type="file" id="memFile" accept="application/json" hidden onchange="memImport(this)">
+          <button type="button" class="setting-btn" data-act="memToggle">Ağırlıklara uygula<span class="state" id="memSw"></span></button>
+          <button type="button" class="setting-btn" data-act="memExport">Dışa aktar (yedek)</button>
+          <button type="button" class="setting-btn" data-act="memFile">İçe aktar</button>
+          <button type="button" class="setting-btn" data-act="memReset">Belleği sıfırla</button>
+          <input type="file" id="memFile" accept="application/json" hidden>
         </div>
       </div>
     </section>
@@ -237,7 +239,7 @@
         <p class="hint">Bildirimler uygulama ya da sayfa açıkken (arka planda olabilir) çalışır; tamamen kapalıyken gelmez.</p>
         <div class="stack">
           <button id="btnTheme" class="setting-btn"><span class="ico" id="themeIco" data-ico="moon" style="--s:22px"></span>Gece / gündüz teması</button>
-          <button id="btnSkin" class="setting-btn" aria-pressed="false"><span class="ico" data-ico="face" style="--s:22px"></span>Çizgi film teması<span class="state" id="skinState">Kapalı</span></button>
+          <div class="skin-pick" role="group" aria-label="Görünüm"><button type="button" class="setting-btn" data-act="setSkin" data-arg="sade" aria-pressed="false">Sade (önerilen)</button><button type="button" class="setting-btn" data-act="setSkin" data-arg="classic" aria-pressed="false">Klasik</button><button type="button" class="setting-btn" data-act="setSkin" data-arg="pastel" aria-pressed="false">Çizgi film</button></div>
           <button id="btnNotif" class="setting-btn" aria-pressed="false"><span class="ico" data-ico="bell" style="--s:22px"></span>Bildirimler<span class="state" id="notifState">Kapalı</span></button>
         </div>
       </div>
@@ -283,12 +285,12 @@
   <p class="credit-line" style="font-size:11px;opacity:.65;margin-top:4px">Veriler: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (CC BY 4.0), <a href="https://www.met.no/" target="_blank" rel="noopener">MET Norway</a> (CC BY 4.0), <a href="https://aviationweather.gov/" target="_blank" rel="noopener">NOAA Aviation Weather</a> (METAR), <a href="https://www.rainviewer.com/" target="_blank" rel="noopener">RainViewer</a>, <a href="https://wttr.in/" target="_blank" rel="noopener">wttr.in</a></p>
 </div>
 
-<nav class="tabbar" aria-label="Bölümler">
+<nav class="tabbar" role="tablist" aria-label="Bölümler">
   <div class="tabbar-inner" role="tablist">
-    <button type="button" class="tab active" id="tab-today" role="tab" aria-selected="true" aria-controls="panel-today" onclick="showTab('today')"><span class="ico" data-ico="partly"></span>Tahmin</button>
-    <button type="button" class="tab" id="tab-detail" role="tab" aria-selected="false" aria-controls="panel-detail" onclick="showTab('detail')"><span class="ico" data-ico="thermo"></span>Detay</button>
-    <button type="button" class="tab" id="tab-sources" role="tab" aria-selected="false" aria-controls="panel-sources" onclick="showTab('sources')"><span class="ico" data-ico="eye"></span>Kaynaklar</button>
-    <button type="button" class="tab" id="tab-settings" role="tab" aria-selected="false" aria-controls="panel-settings" onclick="showTab('settings')"><span class="ico" data-ico="pin"></span>Ayarlar</button>
+    <button type="button" class="tab active" id="tab-today" role="tab" aria-selected="true" aria-controls="panel-today" data-act="showTab" data-arg="today"><span class="ico" data-ico="partly"></span>Tahmin</button>
+    <button type="button" class="tab" id="tab-detail" role="tab" aria-selected="false" aria-controls="panel-detail" data-act="showTab" data-arg="detail"><span class="ico" data-ico="thermo"></span>Detay</button>
+    <button type="button" class="tab" id="tab-sources" role="tab" aria-selected="false" aria-controls="panel-sources" data-act="showTab" data-arg="sources"><span class="ico" data-ico="eye"></span>Kaynaklar</button>
+    <button type="button" class="tab" id="tab-settings" role="tab" aria-selected="false" aria-controls="panel-settings" data-act="showTab" data-arg="settings"><span class="ico" data-ico="pin"></span>Ayarlar</button>
   </div>
 </nav>
 
@@ -416,7 +418,8 @@
   </div>
 </div>
 
-<script src="js/app.js?v=kristal-4"></script>
-<script src="js/kristal.js?v=kristal-9"></script>
+<script src="js/core.js?v=f80068bd"></script>
+<script src="js/app.js?v=05f0f8af"></script>
+<script src="js/kristal.js?v=19a0e8ac"></script>
 </body>
 </html>

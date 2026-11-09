@@ -1,6 +1,6 @@
 # <img src="docs/h-01.svg" alt="Mikro-Klima Kontrol Merkezi">
 
-Ücretsiz, reklamsız, hesap istemeyen bir hava durumu uygulaması. Tek bir servise güvenmek yerine onlarca kaynağı yan yana koyar, birleştirir ve geçmişte hangisinin bölgende daha sık haklı çıktığına bakar.
+Ücretsiz, reklamsız, hesap istemeyen bir hava durumu uygulaması. Tek bir servise güvenmek yerine 14 kaynağı (12 hava modeli, MET Norway ve wttr.in) yan yana koyar, birleştirir ve geçmişte hangisinin bölgende daha sık haklı çıktığına bakar.
 
 Forevye tarafından geliştirildi, yani ben.
 
@@ -118,13 +118,20 @@ Model sahibi kurumlara da teşekkürler: ECMWF, NOAA, DWD, Météo-France, Envir
 Statik bir site ve küçük bir API, ikisi de tek bir Cloudflare Workers projesinden yayınlanır.
 
 ```
-index.html, gizlilik.html, css/, js/, lib/, fonts/, sw.js, manifest, ikonlar   yayınlanan site
-_headers      güvenlik başlıkları
+index.html, gizlilik.html, css/, lib/, fonts/, sw.js, manifest, ikonlar   yayınlanan site
+js/core.js    saf hesaplar: mikro-klima skoru, medyan/ortalama, HTML kaçışı, yağış zamanı (testli)
+js/app.js     arayüz, veri çekme, birleştirme, karne
+js/kristal.js kristal arayüzü
+js/theme.js   tema (sayfa çizilmeden önce çalışır)
+css/sade.css   Sade görünüm (varsayılan). Klasik ve Çizgi film görünümleri Ayarlar > Görünüm'den seçilir
+_headers      güvenlik başlıkları (CSP dahil)
 worker/       /api/* uçları: kristal sunucusu (Cloudflare Worker + D1)
 schema.sql    D1 tabloları
 wrangler.toml Cloudflare ayarları
 metar.py      Havalimanı METAR verisini toplar
 .github/      metar.yml: her 30 dakikada çalışır, sonucu metar-data dalına yazar
+tests/        node --test ile çalışan testler
+bump-version.mjs  ?v= sürüm numaralarını ve önbellek adını dosya içeriğinden üretir
 docs/         sadece bu README'deki başlık görselleri
 .assetsignore yayına girmeyecek dosyalar
 ```
@@ -142,7 +149,18 @@ npx wrangler deploy
 
 Not: GitHub, 60 gün boyunca hareketsiz kalan depolarda zamanlanmış iş akışlarını kapatır. METAR verisi bir gün eskirse Actions sekmesinden `metar-tr` iş akışını yeniden etkinleştir. İş akışı, önceki veriyi indiremezse 72 saatlik geçmişi silmemek için bilerek hata verip durur.
 
-`sw.js` çevrimdışı çalışmayı sağlar. `index.html` içindeki `?v=` sürüm numaralarını değiştirdiğinde `sw.js` içindeki `SHELL` listesini ve `V` sürümünü de güncelle.
+**Geliştirme akışı** (Node 22.5+ gerekir)
+
+```
+npm test         # saf fonksiyonlar, Worker, site bütünlüğü testleri
+npm run bump     # css/js değiştirdiysen: ?v= numaralarını ve sw.js önbellek adını günceller
+npm run check    # bump gerekli mi + testler (değişiklik yapmaz)
+npm run deploy   # bump + testler + wrangler deploy
+```
+
+`sw.js` çevrimdışı çalışmayı sağlar. Yeni bir css/js dosyası eklersen `bump-version.mjs` içindeki `TRACKED` listesine ve `sw.js` içindeki `SHELL` listesine ekle.
+
+**CSP kuralı:** `_headers` içindeki `script-src 'self'` satır içi betiği ve `onclick` gibi olay özniteliklerini engeller. Yeni düğmeye `onclick` yazma. `data-act="islemAdi"` (gerekirse `data-arg="değer"`) yaz ve işlemi `js/app.js` sonundaki `ACT` tablosuna ekle. Bunu unutursan testler (`tests/site.test.mjs`) hata verir.
 
 ## <img src="docs/h-11.svg" alt="Gizlilik">
 

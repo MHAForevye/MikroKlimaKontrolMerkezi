@@ -1,0 +1,24 @@
+/* Erişilebilirlik (tüm görünümlerde): klavye ile "İçeriğe geç" bağlantısı */
+.skip-link { position: absolute; left: 8px; top: -64px; z-index: 1000; padding: 10px 14px; border-radius: 8px; background: #0f172a; color: #fff; font-weight: 700; text-decoration: none; }
+.skip-link:focus { top: 8px; }
+main:focus { outline: none; }
+
+/* Görünüm seçici (tüm görünümlerde) */
+.skin-pick { display: grid; gap: 8px; }
+.skin-pick .setting-btn.on { outline: 2px solid var(--accent); font-weight: 700; }
+.sade-line { display: none; }
+
+/* Sade görünüm: Klasik'in renkleri, daha az öğe, büyük yazı, düz dil */
+html[data-skin="sade"] body { font-size: 17px; line-height: 1.5; }
+html[data-skin="sade"] main { max-width: 620px; margin-inline: auto; }
+html[data-skin="sade"] #heroTemp { font-size: clamp(72px, 24vw, 104px); line-height: 1; }
+html[data-skin="sade"] .sade-line { display: block; margin-top: 14px; padding: 12px 14px; border-radius: 14px; font-size: 1.1em; font-weight: 600; background: color-mix(in srgb, var(--accent) 12%, transparent); }
+html[data-skin="sade"] #heroStats,
+html[data-skin="sade"] #tab-sources { display: none !important; }
+html[data-skin="sade"] .tabbar { display: flex; }
+html[data-skin="sade"] .tabbar .tab { flex: 1; }
+
+/* Sade erişilebilirlik: belirgin odak, rahat dokunma alanı, metin için yeterli kontrast (açık tema: 5.9:1 / 5.4:1) */
+html[data-skin="sade"] :is(button, select, input, a, [role="button"], [role="tab"]):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+html[data-skin="sade"] :is(.setting-btn, .tab, .mode-btn, select) { min-height: 48px; }
+html[data-skin="sade"][data-skin][data-theme="light"] { --accent: #0369a1; }

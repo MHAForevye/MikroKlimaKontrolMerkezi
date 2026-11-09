@@ -8,8 +8,8 @@ const CFG = {
     { name: '3 Günlük Paket',            short: '3 günlük', cost: 500 },
     { name: '7 Günlük Paket (Haftalık)', short: '7 günlük', cost: 1000 }
   ],
-  maxNewPerIp: 5,         // aynı IP'den günde en fazla kaç yeni hesap
-  adminFailPer10m: 8,     // aynı IP'den 10 dakikada en fazla kaç yanlış yönetici anahtarı denemesi
+  maxNewPerIp: 20,        // aynı IP'den günde en fazla kaç yeni hesap (operatörler tek IP'yi yüzlerce kişiyle paylaşır, o yüzden cömert)
+  adminFailPer10m: 30,    // aynı IP'den 10 dakikada en fazla kaç yanlış yönetici anahtarı denemesi
   redeemPer10m: 20,       // bir hesabın 10 dakikada en fazla kaç kod denemesi
   buyPer10m: 10           // bir hesabın 10 dakikada en fazla kaç satın alma isteği
 };

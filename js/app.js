@@ -126,7 +126,7 @@ function showTab(t, save) {
     const on = k === t;
     $('panel-' + k).classList.toggle('active', on);
     const b = $('tab-' + k); b.classList.toggle('active', on);
-    b.setAttribute('aria-selected', on ? 'true' : 'false');
+    b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1;
   });
   if (t === 'detail') { try { if (chartInstance) chartInstance.resize(); if (metricChart) metricChart.resize(); } catch (e) {} }
   if (t === 'detail') setTimeout(() => { try { rtLoad(); mtLoad(); } catch (e) {} }, 50);
@@ -200,26 +200,6 @@ async function addNewLocation() {
   fetchWeatherData();
 }
 
-/* ===== Mikro-Klima Skoru: yağış potansiyeli / atmosferik gerilim (0-10), formül bilgi penceresinde ===== */
-const CATS = [[2, 'Açık, kuru ve kararlı hava'], [4, 'Sakin ve hafif nemli hava'], [6, 'Sınırda: bulutlu, potansiyel dönem'], [8, 'Yüksek yağış potansiyeli'], [11, 'Kritik eşik: fırtına / şiddetli yağış riski']];
-const catOf = s => CATS.find(c => s < c[0])[1];
-function scoreOf(h) {
-  const cl = (v, a, b) => Math.max(0, Math.min(1, (v - a) / (b - a)));
-  const n = v => v == null ? 0 : v;
-  const spread = (h.temp != null && h.dew != null) ? h.temp - h.dew : 8;
-  let s = 0.30 * cl(n(h.hum), 50, 100) * 10 + 0.25 * (1 - cl(spread, 0, 8)) * 10 + 0.25 * n(h.cloud) / 10 + 0.20 * n(h.pop) / 10 + Math.min(2, n(h.cape) / 1000);
-  let add = 0;
-  if (h.ptr != null) add += h.ptr <= -4 ? 1 : h.ptr <= -2 ? 0.5 : 0;
-  if (h.rh7 != null && h.rh7 >= 80) add += 0.5;
-  if (h.pw != null && h.pw >= 35) add += 0.5;
-  if (h.li != null && h.li <= -4 && n(h.cape) >= 300) add += 0.5;
-  s += Math.min(2, add);
-  const p = n(h.precip);
-  if (p >= 0.1) s = Math.max(s, 6);
-  if (p >= 1) s = Math.max(s, 7.5);
-  if (p >= 4 || h.code >= 95 || (n(h.cape) >= 2500 && (p >= 0.1 || n(h.pop) >= 30))) s = Math.max(s, 9);
-  return +Math.max(0, Math.min(10, s)).toFixed(1);
-}
 /* Hava kodu tek bir modelden (best-match) gelir. Birleşik yağış/CAPE ve kaynak oyu desteklemiyorsa kodu bulut durumuna indirir. */
 function adjCode(h) {
   const c = h.codeRaw; if (c == null) return c;
@@ -367,7 +347,7 @@ function selectHour(i) { activeHourIndex = i; const w = win(); renderStrip(w); r
 
 function renderDays() {
   $('dayStrip').innerHTML = days.map((d, i) =>
-    '<div class="day-chip' + (i === activeDayIndex ? ' active' : '') + '" role="button" tabindex="0" onclick="selectDay(' + i + ')">' +
+    '<div class="day-chip' + (i === activeDayIndex ? ' active' : '') + '" role="button" tabindex="0" data-act="selectDay" data-arg="' + i + '">' +
     '<div>' + dLabel(i) + '</div><div style="font-size:.62rem;opacity:.8">' + d.date.slice(8) + '.' + d.date.slice(5, 7) + '</div>' +
     '<span class="ico cico">' + ico(vizIcon(Object.assign({}, d.peak, { day: 1 }))) + '</span>' +
     '<div style="font-weight:700">' + Math.round(d.tmax) + '°/' + Math.round(d.tmin) + '°</div>' +
@@ -376,7 +356,7 @@ function renderDays() {
 function renderStrip(w) {
   const s = $('hourStrip');
   s.innerHTML = w.map((h, i) =>
-    '<div class="hour-chip' + (i === activeHourIndex ? ' active' : '') + '" role="button" tabindex="0" onclick="selectHour(' + i + ')">' +
+    '<div class="hour-chip' + (i === activeHourIndex ? ' active' : '') + '" role="button" tabindex="0" data-act="selectHour" data-arg="' + i + '">' +
     '<div class="hour-chip-time">' + pad(h.hh) + ':00</div>' +
     '<span class="ico cico">' + ico(vizIcon(h)) + '</span>' +
     '<div class="hour-chip-temp">' + fmt(h.temp, 0, '°') + '</div></div>').join('');
@@ -553,11 +533,7 @@ const MODEL_VARS = 'temperature_2m,relative_humidity_2m,dew_point_2m,precipitati
 const FUSE_F = ['temp', 'hum', 'dew', 'cloud', 'wind', 'gust', 'press', 'cape'];
 let SRC = [], STAT = [], ENS = null, EXT = null, srcTimer = 0, srcLoc = '';
 const num = v => (v == null || v === '' || isNaN(+v)) ? null : +v;
-const MEAN = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
-const MED = a => { a = a.slice().sort((x, y) => x - y); if (!a.length) return null; const m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
 const hkOf = ms => new Date(ms + (rawApiData && rawApiData.utc_offset_seconds || 0) * 1000).toISOString().slice(0, 13);
-const escHtml = x => String(x == null ? '' : x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const esc = escHtml;
 const errMsg = e => e && e.name === 'AbortError' ? 'zaman aşımı' : (e && e.message) || 'hata';
 /* İstek kuyruğu: aynı anda en çok NETMAX istek çalışır (düşük donanımda 3), arka plan işleri (pri 1) öne geçmez */
 const NETMAX = ((navigator.hardwareConcurrency || 4) <= 4 || (navigator.deviceMemory || 4) <= 2) ? 3 : 5;
@@ -858,12 +834,6 @@ function calP(h) {
   const ix = Math.round(pv.filter(v => v >= 0.1).length / pv.length * 7), c = HIST.cal[ix];
   return (c.w + 2 * ix / 7) / (c.n + 2) * 100;
 }
-function wmed(p) {
-  p = p.slice().sort((a, b) => a[0] - b[0]);
-  const tot = p.reduce((a, x) => a + x[1], 0); let c = 0;
-  for (const x of p) { c += x[1]; if (c >= tot / 2) return x[0]; }
-  return p.length ? p[p.length - 1][0] : null;
-}
 function renderKarne() {
   const tb = $('karneTable'); if (!tb) return;
   if (!HIST || !HIST.skill) {
@@ -1039,6 +1009,8 @@ function renderHero() {
   $('heroIcon').innerHTML = ico(vizIcon(h));
   $('heroTemp').textContent = fmt(h.temp, 0, '°');
   $('heroDesc').textContent = WMO[h.code] || '—';
+  const i0 = hours.indexOf(h), s0 = i0 < 0 ? (nowIdx || 0) : i0;
+  $('sadeLine').textContent = sadeText(hours.slice(s0, s0 + 12).map(x => ({ hh: x.t.slice(11, 13), pop: x.pop, precip: x.precip })));
   $('heroFeels').textContent = 'Hissedilen ' + fmt(h.feels, 0, '°');
   const range = d ? 'En yüksek ' + Math.round(d.tmax) + '° · en düşük ' + Math.round(d.tmin) + '°' : '';
   $('heroHiLo').textContent = sharedPresentation
@@ -1054,7 +1026,7 @@ function renderOutlook() {
   const lo = Math.min.apply(null, D.map(d => d.tmin)), hi = Math.max.apply(null, D.map(d => d.tmax)), span = Math.max(1, hi - lo);
   box.innerHTML = D.map((d, i) => {
     const l = (d.tmin - lo) / span * 100, w = Math.max(6, (d.tmax - d.tmin) / span * 100);
-    return '<button type="button" class="out-row" onclick="openDay(' + i + ')" aria-label="' + dLabel(i) + ' gününü aç">' +
+    return '<button type="button" class="out-row" data-act="openDay" data-arg="' + i + '" aria-label="' + dLabel(i) + ' gününü aç">' +
       '<span class="out-day">' + dLabel(i) + '</span><span class="ico" style="--s:30px">' + ico(vizIcon(Object.assign({}, d.peak, { day: 1 }))) + '</span>' +
       '<span class="out-t">' + Math.round(d.tmin) + '°</span><span class="out-bar"><span style="left:' + l + '%;width:' + w + '%"></span></span><span class="out-t">' + Math.round(d.tmax) + '°</span>' +
       '<span class="out-r">' + d.rain.toFixed(1) + ' mm</span></button>';
@@ -1073,7 +1045,7 @@ const METRICS = [
   { k: 'uv', n: 'UV', u: '', d: 1, f: h => h.uv, min: 0 }
 ];
 function paintMetricChips() {
-  $('metricChips').innerHTML = METRICS.map(m => '<button type="button" class="chip' + (m.k === metricKey ? ' active' : '') + '" onclick="setMetric(\'' + m.k + '\')">' + m.n + '</button>').join('');
+  $('metricChips').innerHTML = METRICS.map(m => '<button type="button" class="chip' + (m.k === metricKey ? ' active' : '') + '" data-act="setMetric" data-arg="' + m.k + '">' + m.n + '</button>').join('');
 }
 function setMetric(k) { metricKey = k; paintMetricChips(); if (hours.length) renderMetric(win()); }
 function renderMetric(w) {
@@ -1106,7 +1078,7 @@ paintMetricChips();
 function renderLocList() {
   const box = $('locList'); if (!box) return;
   const cur = $('locationSelect').selectedIndex;
-  box.innerHTML = savedLocations.map((l, i) => '<button type="button" class="loc-item' + (i === cur ? ' active' : '') + '" onclick="pickLoc(' + i + ')"' + (i === cur ? ' aria-current="true"' : '') + '>' +
+  box.innerHTML = savedLocations.map((l, i) => '<button type="button" class="loc-item' + (i === cur ? ' active' : '') + '" data-act="pickLoc" data-arg="' + i + '"' + (i === cur ? ' aria-current="true"' : '') + '>' +
     '<span class="ico" style="--s:22px">' + ico('pin') + '</span><span class="loc-name">' + escHtml(l.name) + '</span>' +
     '<span class="loc-meta">' + (l.alt !== '' && l.alt != null ? escHtml(l.alt) + ' m' : '') + '</span>' + (i === cur ? '<span class="state">Seçili</span>' : '') + '</button>').join('');
 }
@@ -1133,8 +1105,9 @@ const CHART_THEME = {
   dark:  { bar:'#8fc3e6', barB:'#f3e8d4', line:'#ffb8d0', pt:'#ffe69a', ptB:'#f3e8d4', leg:'#b6abc9', tick:'#b6abc9', y:'#9fd3f0', y1:'#ffb8d0', grid:'#f3e8d424' }
 };
 const curTheme = () => document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-const curSkin = () => document.documentElement.getAttribute('data-skin') === 'pastel' ? 'pastel' : 'classic';
-const chartKey = () => (curSkin() === 'classic' ? 'cl_' : '') + curTheme();
+const SKINS = ['sade', 'classic', 'pastel'];   // sade = varsayılan, klasik ve çizgi film (pastel) Ayarlar'dan seçilir
+const curSkin = () => { const s = document.documentElement.getAttribute('data-skin'); return SKINS.indexOf(s) >= 0 ? s : 'sade'; };
+const chartKey = () => (curSkin() === 'pastel' ? '' : 'cl_') + curTheme();
 function applyChartTheme() {
   const c = chartInstance; if (!c) return; const t = CHART_THEME[chartKey()];
   const b = c.data.datasets[0], l = c.data.datasets[1], sc = c.options.scales;
@@ -1147,7 +1120,7 @@ function applyChartTheme() {
 function setTheme(t, save) {
   document.documentElement.setAttribute('data-theme', t);
   if (save) { try { localStorage.setItem('mk_theme', t); } catch (e) {} }
-  const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = curSkin() === 'classic' ? (t === 'dark' ? '#0f172a' : '#f1f5f9') : (t === 'dark' ? '#1e1a2e' : '#fdf1dc');
+  const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = curSkin() !== 'pastel' ? (t === 'dark' ? '#0f172a' : '#f1f5f9') : (t === 'dark' ? '#1e1a2e' : '#fdf1dc');
   const ic = $('themeIco'); if (ic) { ic.dataset.ico = t === 'dark' ? 'sun' : 'moon'; ic.innerHTML = ico(ic.dataset.ico); }
   applyChartTheme();
   if (hours.length) { try { renderMetric(win()); } catch (e) {} }
@@ -1155,14 +1128,14 @@ function setTheme(t, save) {
 $('btnNotif').addEventListener('click', toggleNotif);
 $('btnTheme').addEventListener('click', () => setTheme(curTheme() === 'dark' ? 'light' : 'dark', true));
 function setSkin(s, save) {
-  document.documentElement.setAttribute('data-skin', s === 'pastel' ? 'pastel' : 'classic');
-  if (save) { try { localStorage.setItem('mk_skin', curSkin()); } catch (e) {} }
-  const on = curSkin() === 'pastel', b = $('btnSkin');
-  if (b) { b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); }
-  const st = $('skinState'); if (st) st.textContent = on ? 'Açık' : 'Kapalı';
+  s = SKINS.indexOf(s) >= 0 ? s : 'sade';
+  document.documentElement.setAttribute('data-skin', s);
+  if (save) { try { localStorage.setItem('mk_skin', s); } catch (e) {} }
+  document.querySelectorAll('[data-act="setSkin"]').forEach(b => { const on = b.dataset.arg === s; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+  const more = $('detailMoreTxt'); if (more) { if (!more.dataset.orig) more.dataset.orig = more.textContent; more.textContent = s === 'sade' ? 'Ayrıntıları gör →' : more.dataset.orig; }
   setTheme(curTheme(), false);
+  try { if (hours.length) renderHero(); } catch (e) {}
 }
-$('btnSkin').addEventListener('click', () => setSkin(curSkin() === 'pastel' ? 'classic' : 'pastel', true));
 
 document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.hour-chip,.day-chip')) { e.preventDefault(); e.target.click(); } });
 /* ===== Forevye stüdyo sayfası ===== */
@@ -1196,7 +1169,7 @@ $('btnRestore').addEventListener('click', () => {
     savedLocations = L.map(l => ({ name: String(l.name), lat: String(l.lat), lon: String(l.lon), alt: l.alt == null ? '' : String(l.alt) }));
     safeStore(); PREFS = sanePrefs(o.prefs); savePrefs(); applyFont(); fillPrefs(); scheduleRefresh();
     if (o.theme === 'dark' || o.theme === 'light') setTheme(o.theme, true);
-    if (o.skin === 'pastel' || o.skin === 'classic') setSkin(o.skin, true);
+    if (SKINS.indexOf(o.skin) >= 0) setSkin(o.skin, true);
     initLocations(0); fetchWeatherData();
     if (o.kr && window.MKKristal) MKKristal.importData(o.kr);
     alert('Yedek yüklendi.');
@@ -1260,13 +1233,6 @@ async function radarOpen() {
 const RTM = { icon_seamless: 'ICON', ecmwf_ifs025: 'ECMWF', gfs_seamless: 'GFS', meteofrance_seamless: 'Météo-France', gem_seamless: 'GEM' };
 let rtT = 0, rtK = '', rtBusy = false;
 const rtHH = (t, off) => String(new Date((t + off) * 1000).getUTCHours()).padStart(2, '0') + ':00';
-function rtWhen(T, P, nowS) {
-  const i = T.findIndex(t => t >= Math.floor(nowS / 3600) * 3600); if (i < 0) return null;
-  const a = []; for (let j = i; j < Math.min(i + 12, T.length); j++) a.push({ t: T[j], w: (P[j] || 0) >= 0.1 });
-  const s = a.findIndex(x => x.w); if (s < 0) return { s: -1 };
-  const e = a.findIndex((x, k) => k > s && !x.w);
-  return { s, st: a[s].t, et: e < 0 ? null : a[e].t };
-}
 async function rtRadar(lat, lon) {
   const j = await (await qf('https://api.rainviewer.com/public/weather-maps.json')).json();
   const F = (j.radar && j.radar.past) || []; if (F.length < 4) return '';
@@ -1447,6 +1413,7 @@ async function mtLoad() {
   let t = '<b>' + esc(b.s.n || b.id) + ' (' + esc(b.id) + ')</b> · ' + Math.round(b.km) + ' km · ' + hm + (ageMin > 120 ? ' <b>(eski veri)</b>' : '') +
     '<br>' + Math.round(o[1]) + '°C · rüzgâr ' + (o[3] != null ? Math.round(o[3] * 1.852) + ' km/sa' : '--') + (o[4] ? ' (hamle ' + Math.round(o[4] * 1.852) + ')' : '') + (pr ? ' · ' + Math.round(pr) + ' hPa' : '') + (rn ? ' · yağış var' : '');
   try { const h = hours[nowIdx], adj = mtTemp({ s: { o: [o], el: b.s.el } }, l, o[0]); if (h && h.temp != null && adj != null) t += '<br>Sayfa şu an ' + Math.round(h.temp) + '°C diyor, ölçüme göre fark ' + (h.temp - adj > 0 ? '+' : '') + (h.temp - adj).toFixed(1) + '° (rakım düzeltmeli).'; } catch (e) {}
+  if (d.upd && Date.now() / 1000 - d.upd > 3 * 3600) t += '<br><b>Uyarı:</b> havalimanı veri dosyası ' + Math.round((Date.now() / 1000 - d.upd) / 3600) + ' saattir güncellenmedi, ölçüm eski olabilir.';
   t += '<br><span style="opacity:.75">' + (mtOk(l, b) ? 'Bu istasyon yakın, kendi karnemde gerçek değer olarak kullanılıyor.' : 'İstasyon uzak ya da rakımı çok farklı; konumunu temsil etmeyebilir, karnede kullanılmıyor.') + '</span>';
   box.innerHTML = t;
 }
@@ -1460,6 +1427,40 @@ offPaint();
 (function () { var m = $('studioMail'); if (!m) return; m.addEventListener('click', function (e) { if (m.dataset.on) return; e.preventDefault(); var a = ['mustafahakansunum', 'gmail.com'].join('@'); m.href = 'mailto:' + a; m.textContent = a; m.dataset.on = '1'; }); })();
 paintIcons();
 paintNotif();
+/* ===== Olay dağıtıcısı: HTML'de onclick yok (CSP satır içi betiği engeller). Düğmeye data-act ile işlem adını, gerekirse data-arg ile değeri yaz ve işlemi aşağıdaki ACT tablosuna ekle. ===== */
+const ACT = {
+  shareCurrentView: () => shareCurrentView(),
+  setMode: a => setMode(a),
+  showTab: a => showTab(a),
+  radarOpen: () => radarOpen(),
+  radarToggle: () => radarToggle(),
+  rtLoad: () => rtLoad(true),
+  memToggle: () => memToggle(),
+  memExport: () => memExport(),
+  memFile: () => $('memFile').click(),
+  memReset: () => memReset(),
+  selectDay: a => selectDay(+a),
+  selectHour: a => selectHour(+a),
+  openDay: a => openDay(+a),
+  setMetric: a => setMetric(a),
+  pickLoc: a => pickLoc(+a),
+  setSkin: a => setSkin(a, true)
+};
+document.addEventListener('click', e => {
+  const el = e.target.closest && e.target.closest('[data-act]');
+  const fn = el && ACT[el.dataset.act];
+  if (fn) fn(el.dataset.arg);
+});
+document.addEventListener('keydown', e => {   // sekmeler: ← → Home End ile gezinme (ARIA tab deseni)
+  const cur = e.target.closest && e.target.closest('.tabbar [role="tab"]');
+  if (!cur || ['ArrowLeft', 'ArrowRight', 'Home', 'End'].indexOf(e.key) < 0) return;
+  const tabs = Array.from(document.querySelectorAll('.tabbar [role="tab"]')).filter(x => getComputedStyle(x).display !== 'none');
+  let i = tabs.indexOf(cur); if (i < 0) return;
+  i = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+  e.preventDefault(); tabs[i].focus(); tabs[i].click();
+});
+(function () { const f = $('memFile'); if (f) f.addEventListener('change', () => memImport(f)); })();
+
 try { if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
 setSkin(curSkin(), false);
 
