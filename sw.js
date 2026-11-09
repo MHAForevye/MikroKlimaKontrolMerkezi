@@ -1,8 +1,11 @@
-/* Çevrimdışı çalışma: sayfa, kütüphaneler ve fontlar önbelleğe alınır; hava API cevapları ayrı, sınırlı bir önbellekte tutulur. */
-const V = 'mk-v14', AV = 'mk-api-v1';
+/* Çevrimdışı çalışma: sayfa, kütüphaneler ve fontlar önbelleğe alınır; hava API cevapları ayrı, sınırlı bir önbellekte tutulur.
+   Sayfa dosyaları "ağ önce": ağ NET_TIMEOUT içinde cevap vermezse önbellekteki kopya hemen gösterilir (yavaş bağlantıda takılmaz),
+   ağ cevabı sonradan gelince önbellek arka planda yenilenir. */
+const V = 'mk-v15', AV = 'mk-api-v1';
 const API_MAX = 60, API_TTL = 24 * 3600e3;   // en fazla 60 kayıt, çevrimdışı yedek olarak en çok 24 saat eski cevap
+const NET_TIMEOUT = 3500;                    // sayfa dosyaları için ağa verilen süre (ms)
 const FONTS = ['patrick-hand-latin-400', 'patrick-hand-latin-ext-400', 'bebas-neue-latin-400', 'bebas-neue-latin-ext-400', 'oswald-latin-300', 'oswald-latin-ext-300', 'oswald-latin-400', 'oswald-latin-ext-400'].map(n => 'fonts/' + n + '-normal.woff2');
-const SHELL = ['./?v=kristal-2', 'manifest.webmanifest', 'icon.png', 'icon-512.png', 'apple-touch-icon.png', 'badge.png', 'css/style.css?v=kristal-2', 'css/classic.css', 'css/fonts.css', 'js/app.js?v=kristal-3', 'js/kristal.js?v=kristal-8', 'lib/chart.umd.min.js', 'lib/leaflet.js', 'lib/leaflet.css', 'gizlilik.html'].concat(FONTS);
+const SHELL = ['./', 'manifest.webmanifest', 'icon.png', 'icon-512.png', 'apple-touch-icon.png', 'badge.png', 'css/style.css?v=kristal-2', 'css/classic.css', 'css/fonts.css', 'js/app.js?v=kristal-4', 'js/kristal.js?v=kristal-9', 'lib/chart.umd.min.js', 'lib/leaflet.js', 'lib/leaflet.css', 'gizlilik.html'].concat(FONTS);
 const API = /(open-meteo\.com|api\.met\.no|wttr\.in|api\.rainviewer\.com|raw\.githubusercontent\.com)/;
 
 self.addEventListener('install', e => {
@@ -27,25 +30,36 @@ async function getApi(r) {
   return hit;
 }
 
+/* Kendi dosyalarımız: ağ önce (zaman aşımlı), olmazsa önbellek */
+async function ownFile(e, r) {
+  const c = await caches.open(V);
+  const cached = (await c.match(r)) || (await c.match(r, { ignoreSearch: true })) || (r.mode === 'navigate' ? await c.match('./', { ignoreSearch: true }) : null);
+  const net = fetch(r).then(res => {
+    if (res.status === 200) e.waitUntil(c.put(r, res.clone()).catch(() => {}));   // 206 ve hata cevapları önbelleğe girmez
+    return res;
+  });
+  if (!cached) return net;
+  return Promise.race([
+    net.catch(() => cached),
+    new Promise(ok => setTimeout(() => ok(cached), NET_TIMEOUT))
+  ]);
+}
+
 self.addEventListener('fetch', e => {
   const r = e.request, u = new URL(r.url);
   if (r.method !== 'GET') return;
   const mine = u.origin === location.origin, api = API.test(u.hostname);
   if (mine && u.pathname.startsWith('/api/')) return;   // kristal sunucusu: asla önbelleğe alınmaz
   if (!mine && !api) return;
+  if (mine) { e.respondWith(ownFile(e, r)); return; }
   e.respondWith((async () => {
     try {
       const res = await fetch(r);
-      if (res.ok) {
-        if (mine) { const c = await caches.open(V); c.put(r, res.clone()); }
-        else e.waitUntil(putApi(r, res.clone()).catch(() => {}));
-      }
+      if (res.status === 200) e.waitUntil(putApi(r, res.clone()).catch(() => {}));
       return res;
     } catch (err) {
-      if (!mine) { const hit = await getApi(r); if (hit) return hit; throw err; }
-      const c = await caches.open(V), hit = await c.match(r, { ignoreSearch: true });
+      const hit = await getApi(r);
       if (hit) return hit;
-      if (r.mode === 'navigate') { const p = await c.match('./', { ignoreSearch: true }); if (p) return p; }
       throw err;
     }
   })());

@@ -556,7 +556,8 @@ const num = v => (v == null || v === '' || isNaN(+v)) ? null : +v;
 const MEAN = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
 const MED = a => { a = a.slice().sort((x, y) => x - y); if (!a.length) return null; const m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
 const hkOf = ms => new Date(ms + (rawApiData && rawApiData.utc_offset_seconds || 0) * 1000).toISOString().slice(0, 13);
-const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, '');
+const escHtml = x => String(x == null ? '' : x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const esc = escHtml;
 const errMsg = e => e && e.name === 'AbortError' ? 'zaman aşımı' : (e && e.message) || 'hata';
 /* İstek kuyruğu: aynı anda en çok NETMAX istek çalışır (düşük donanımda 3), arka plan işleri (pri 1) öne geçmez */
 const NETMAX = ((navigator.hardwareConcurrency || 4) <= 4 || (navigator.deviceMemory || 4) <= 2) ? 3 : 5;
@@ -836,9 +837,13 @@ function wmap(kind) {
   const off = !S || (kind === 'r' && HIST.wetHrs < 8);
   const known = off ? [] : Object.keys(S).filter(k => k !== 'med').map(k => f(S[k]));
   const avg = known.length ? MEAN(known) : 1;
-  SRC.forEach(s => { out[s.key] = ((!off && S[s.key]) ? f(S[s.key]) : avg) * memFactor(kind, s.key); });
+  const tr = era5Trust();
+  SRC.forEach(s => { out[s.key] = ((!off && S[s.key]) ? avg * Math.pow(f(S[s.key]) / avg, tr) : avg) * memFactor(kind, s.key); });
   return out;
 }
+/* ERA5 ECMWF'nin sisteminden çıkar ve kaba çözünürlüklüdür; bu yüzden geçmiş başarının ağırlığı kısılır (0,75).
+   Bu konumda METAR ile doğrulanmış yeterli canlı veri birikince ERA5'in payı daha da azalır (0,5). */
+function era5Trust() { try { const m = memOn() && memLoc().tm; return m && m.m >= 72 ? 0.5 : 0.75; } catch (e) { return 0.75; } }
 /* Sıcaklık sapma düzeltmesi: kaynağın geçmişteki ortalama sapması (en çok ±3°) birleşik hesaptan önce çıkarılır */
 function bmap() {
   const out = {}, S = HIST && HIST.skill;
@@ -882,7 +887,7 @@ function renderKarne() {
   $('karneSum').textContent = d + ' gün · en iyi: ' + (nm[best] || '');
   $('karneNote').innerHTML = 'Open-Meteo arşivindeki geçmiş tahminler, aynı konumun gerçek (ERA5) verisiyle otomatik kıyaslandı (' + HIST.from + ' → ' + HIST.to + '). Sıc. hata: ortalama mutlak sapma, parantezde sistematik eğilim (düşük iyi). Yağış CSI: yağışlı saatleri tutturma başarısı, yanlış alarm ve kaçırma dahil (yüksek iyi).' +
     (rainOk ? '' : '<br>Bu dönemde bölgede neredeyse hiç yağış olmadı; yağış başarısı hesaplanamadı, yağışta eşit ağırlık kullanılıyor.') +
-    '<br>Yağış olasılığı da geçmişe göre kalibre edilir: "kaç model yağış diyor" bilgisi, bu bölgede geçmişte gerçekte ne sıklıkla yağış çıktığıyla eşlenir.<br>Birleşik tahmin bu başarıya göre ağırlıklanır ve her kaynağın sıcaklıktaki sistematik eğilimi (en çok ±3°) düzeltilir. MET Norway ve wttr.in için arşiv yok, bilinen kaynakların ortalama ağırlığını alır.';
+    '<br>Yağış olasılığı da geçmişe göre kalibre edilir: "kaç model yağış diyor" bilgisi, bu bölgede geçmişte gerçekte ne sıklıkla yağış çıktığıyla eşlenir.<br>Birleşik tahmin bu başarıya göre ağırlıklanır ve her kaynağın sıcaklıktaki sistematik eğilimi (en çok ±3°) düzeltilir. MET Norway ve wttr.in için arşiv yok, bilinen kaynakların ortalama ağırlığını alır.<br><b>Not:</b> ERA5, ECMWF\'nin kendi sisteminden çıkar ve kaba çözünürlüklüdür, ayrıca ~5 gün gecikmelidir; bu yüzden ECMWF modellerini hafifçe kayırabilir. Geçmiş başarının ağırlığı kısılır, bölgende METAR ile doğrulanmış canlı veri biriktikçe daha da azalır.';
 }
 INFO.karne = ['Geçmiş doğruluk', 'Hiçbir şeyi senin girmen gerekmez. Her açılışta, bu konum için son 30 günün <b>arşivlenmiş model tahminleri</b> internetten çekilir ve aynı saatlerin gerçek (ERA5 yeniden analiz) değerleriyle kıyaslanır. Böylece hangi modelin bölgende geçmişte daha sık haklı çıktığı hemen görülür.<br><br><b>Ağırlık:</b> sıcaklıkta 1/(rastgele hata+0,4)², yağışta (CSI+0,15)² ile hesaplanır; başarılı kaynağın sözü birleşik tahminde daha çok sayılır. Sonuç 12 saat önbelleğe alınır.<br><br>Not: ERA5 gerçek ölçüm değil, istasyon/uydu verisiyle üretilmiş en iyi yeniden analizdir; havalimanı METAR verisi tarayıcıdan çekilemediği için kullanılmıyor.'];
 
@@ -1028,7 +1033,6 @@ function notifyAlerts(A) {
 }
 
 /* ===== v3: özet kartı, notlar, 7 günlük bakış, ölçüm grafiği, konum listesi ===== */
-const escHtml = x => String(x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function renderHero() {
   const h = (sharedPresentation ? win()[activeHourIndex] : null) || hours[nowIdx] || hours[0]; if (!h) return;
   const d = days.find(x => x.date === h.date);
@@ -1384,7 +1388,28 @@ function memTick() {
 }
 function memToggle() { try { localStorage.setItem(MKON, memOn() ? '0' : '1'); } catch (e) {} memRender(); scheduleFuse(); }
 function memExport() { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(memLoad())], { type: 'application/json' })); a.download = 'mikro-klima-kontrol-merkezi-karne.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
-function memImport(inp) { const f = inp.files[0]; if (!f) return; f.text().then(t => { const o = JSON.parse(t); if (!o || !o.locs) throw 0; MEM = o; memSave(); memRender(); scheduleFuse(); }).catch(() => alert('Dosya geçersiz.')); inp.value = ''; }
+function memClean(o) {
+  if (!o || typeof o !== 'object' || !o.locs || typeof o.locs !== 'object' || Array.isArray(o.locs)) throw new Error('şekil');
+  const fin = v => typeof v === 'number' && isFinite(v), out = { locs: {} };
+  Object.keys(o.locs).slice(0, 50).forEach(k => {
+    const l = o.locs[k]; if (!/^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(k) || !l || typeof l !== 'object') return;
+    const c = { pend: [], st: {}, rec: fin(l.rec) ? l.rec : 0, ver: fin(l.ver) ? l.ver : 0, name: typeof l.name === 'string' ? l.name.slice(0, 80) : '' };
+    if (l.tm && fin(l.tm.m) && fin(l.tm.a)) c.tm = { m: l.tm.m, a: l.tm.a };
+    (Array.isArray(l.pend) ? l.pend : []).slice(-150).forEach(e => {
+      if (!e || typeof e.k !== 'string' || !fin(e.L) || !e.m || typeof e.m !== 'object') return;
+      const m = {}; Object.keys(e.m).forEach(s => { const a = e.m[s]; if (Array.isArray(a) && a.every(x => x === null || fin(x))) m[s] = [a[0] == null ? null : a[0], a[1] == null ? null : a[1]]; });
+      if (Object.keys(m).length) c.pend.push({ k: e.k.slice(0, 13), L: e.L, u: fin(e.u) ? e.u : 0, m });
+    });
+    Object.keys(l.st && typeof l.st === 'object' ? l.st : {}).forEach(s => {
+      const q = l.st[s], f = ['n', 'ae', 'e', 'h', 'mi', 'fa'];
+      if (q && typeof q === 'object' && f.every(x => fin(q[x]))) { c.st[s] = {}; f.forEach(x => { c.st[s][x] = q[x]; }); }
+    });
+    out.locs[k] = c;
+  });
+  if (!Object.keys(out.locs).length) throw new Error('boş');
+  return out;
+}
+function memImport(inp) { const f = inp.files[0]; if (!f) return; f.text().then(t => { MEM = memClean(JSON.parse(t)); memSave(); memRender(); scheduleFuse(); }).catch(() => alert('Dosya geçersiz.')); inp.value = ''; }
 function memReset() { if (!confirm('Kendi karne belleği silinsin mi?')) return; MEM = { locs: {} }; memSave(); memRender(); scheduleFuse(); }
 
 /* ===== Gerçek ölçüm: en yakın havalimanı METAR (GitHub Actions'ın hazırladığı Türkiye JSON'u) ===== */
@@ -1419,7 +1444,7 @@ async function mtLoad() {
   const hm = new Date(o[0] * 1000).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
   const rn = /RA|DZ|SH|TS|SN/.test(o[6] || '');
   const pr = o[5] ? (o[5] > 200 ? o[5] : o[5] * 33.8639) : null;
-  let t = '<b>' + esc(b.s.n || b.id) + ' (' + b.id + ')</b> · ' + Math.round(b.km) + ' km · ' + hm + (ageMin > 120 ? ' <b>(eski veri)</b>' : '') +
+  let t = '<b>' + esc(b.s.n || b.id) + ' (' + esc(b.id) + ')</b> · ' + Math.round(b.km) + ' km · ' + hm + (ageMin > 120 ? ' <b>(eski veri)</b>' : '') +
     '<br>' + Math.round(o[1]) + '°C · rüzgâr ' + (o[3] != null ? Math.round(o[3] * 1.852) + ' km/sa' : '--') + (o[4] ? ' (hamle ' + Math.round(o[4] * 1.852) + ')' : '') + (pr ? ' · ' + Math.round(pr) + ' hPa' : '') + (rn ? ' · yağış var' : '');
   try { const h = hours[nowIdx], adj = mtTemp({ s: { o: [o], el: b.s.el } }, l, o[0]); if (h && h.temp != null && adj != null) t += '<br>Sayfa şu an ' + Math.round(h.temp) + '°C diyor, ölçüme göre fark ' + (h.temp - adj > 0 ? '+' : '') + (h.temp - adj).toFixed(1) + '° (rakım düzeltmeli).'; } catch (e) {}
   t += '<br><span style="opacity:.75">' + (mtOk(l, b) ? 'Bu istasyon yakın, kendi karnemde gerçek değer olarak kullanılıyor.' : 'İstasyon uzak ya da rakımı çok farklı; konumunu temsil etmeyebilir, karnede kullanılmıyor.') + '</span>';

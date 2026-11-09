@@ -28,13 +28,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Mikro-Klima">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-capable" content="yes">
   <script>(function(){var t=null;try{t=localStorage.getItem("mk_theme")}catch(e){}if(!t)t=(window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light";document.documentElement.setAttribute("data-theme",t);var k=null;try{k=localStorage.getItem("mk_skin")}catch(e){}document.documentElement.setAttribute("data-skin",k==="pastel"?"pastel":"classic");})();</script>
   
   <link rel="stylesheet" href="css/fonts.css"><link rel="stylesheet" href="css/style.css?v=kristal-2"><link rel="stylesheet" href="css/classic.css">
   <script src="lib/chart.umd.min.js"></script>
-<script data-goatcounter="https://havadurumu.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+<script data-goatcounter="https://havadurumu.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><filter id="wob" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="3" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.6"/></filter><filter id="paint" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" seed="5" result="w"/><feDisplacementMap in="SourceGraphic" in2="w" scale="3.4" result="d"/><feTurbulence type="fractalNoise" baseFrequency="0.4" numOctaves="1" seed="2" result="g"/><feColorMatrix in="g" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1 1.45" result="ga"/><feComposite in="d" in2="ga" operator="in"/></filter></defs></svg>
@@ -353,6 +351,7 @@
         <div style="text-align:right"><div class="param-label">Site ID'n</div><div class="k-big k-id" id="kId">--------</div><button type="button" id="kCopyId" class="k-mini">Kopyala</button></div>
       </div>
       <div class="src-stats" id="kToday"></div>
+      <div class="stack" style="margin-top:10px" id="kOldWrap" hidden><button type="button" id="kRestoreOld" class="setting-btn">Önceki hesabımı geri yükle</button><small class="src-stats" style="margin:6px 0 0">Sunucu eski hesabını bulamadığı için yeni hesap açıldı. Eski hesabın bu cihazda duruyor; geri yüklersen bakiyen geri gelir.</small></div>
       <div class="pref-row" style="margin-top:10px"><label for="kCode">Hediye kodu<small>arkadaşından geldiyse</small></label>
         <input type="text" id="kCode" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXXX"></div>
       <div class="stack" style="margin-top:10px"><button type="button" id="kCodeUse" class="setting-btn">Kodu kullan</button></div>
@@ -404,7 +403,7 @@
     </div>
 
     <p class="studio-foot">Paketi aldığında mail taslağı açılır. Kod, doğrulamadan sonra mail ile gönderilir.</p>
-    <p class="studio-foot" style="opacity:.6">Sayfa v8 · <span id="kVer">kristal.js eski ya da yüklenmedi</span></p>
+    <p class="studio-foot" style="opacity:.6">Sayfa v9 · <span id="kVer">kristal.js eski ya da yüklenmedi</span></p>
   </div>
 </div>
 
@@ -417,7 +416,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=kristal-3"></script>
-<script src="js/kristal.js?v=kristal-8"></script>
+<script src="js/app.js?v=kristal-4"></script>
+<script src="js/kristal.js?v=kristal-9"></script>
 </body>
 </html>

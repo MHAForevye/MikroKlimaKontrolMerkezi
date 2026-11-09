@@ -88,10 +88,11 @@ Kendi indeksim olduğu için resmî bir uyarının yerini tutmaz, can ve mal gü
 - Yedek al / geri yükle, yazı boyutu ve eşik tercihleri
 - Ana ekrana eklenebilir (PWA), çevrimdışı çalışır
 - Sık sorulan sorular ve gizlilik sayfası
+- Kristal ödül sistemi (isteğe bağlı): günlük giriş ödülü, Mağaza ve hediye kodu. Hava verisinden bağımsızdır, küçük bir Cloudflare Worker + D1 sunucusunda çalışır.
 
 ## <img src="docs/h-08.svg" alt="Neler yok">
 
-- <mark>**Hesap, reklam ve kendi sunucum yok.**</mark> Tercihlerin tarayıcında kalır.
+- <mark>**Reklam ve zorunlu hesap yok.**</mark> Hava tercihlerin ve kayıtlı konumların tarayıcında kalır. Tek istisna kristal sistemi: onun için küçük bir sunucum var (Cloudflare Worker + D1), orada sadece rastgele Site ID, bakiye ve talep kayıtları tutulur. Ayrıntı [gizlilik.html](gizlilik.html) içinde.
 - <mark>**Resmi uyarı yok.**</mark> Can ve mal güvenliği gerektiren durumlarda Meteoroloji Genel Müdürlüğü'nün (MGM) uyarılarına bak.
 - <mark>**METAR sadece Türkiye**</mark> (LT kodlu havalimanları).
 - <mark>**Radar tabanlı kısa vade (nowcast)**</mark> MET Norway kapsamında, yani şu an esas olarak kuzey Avrupa'da. Orası dışında 15 dakikalık veri modellerden türetilir, radar kullanan servislerle yağış başlangıcında fark çıkabilir.
@@ -114,7 +115,34 @@ Model sahibi kurumlara da teşekkürler: ECMWF, NOAA, DWD, Météo-France, Envir
 
 ## <img src="docs/h-10.svg" alt="Altyapı (kısaca)">
 
-Sunucusuz, tek sayfalık statik bir site: `index.html`, `css/`, `js/`, `lib/` (Chart.js, Leaflet) ve `fonts/`. GitHub Pages üzerinden yayınlanır. Havalimanı verisi, `.github/workflows/metar.yml` ile her 30 dakikada bir GitHub Actions'ta çekilip `metar-data` dalına yazılır. `sw.js` çevrimdışı çalışmayı sağlar.
+Statik bir site ve küçük bir API, ikisi de tek bir Cloudflare Workers projesinden yayınlanır.
+
+```
+index.html, gizlilik.html, css/, js/, lib/, fonts/, sw.js, manifest, ikonlar   yayınlanan site
+_headers      güvenlik başlıkları
+worker/       /api/* uçları: kristal sunucusu (Cloudflare Worker + D1)
+schema.sql    D1 tabloları
+wrangler.toml Cloudflare ayarları
+metar.py      Havalimanı METAR verisini toplar
+.github/      metar.yml: her 30 dakikada çalışır, sonucu metar-data dalına yazar
+docs/         sadece bu README'deki başlık görselleri
+.assetsignore yayına girmeyecek dosyalar
+```
+
+Siteyi kökten sunuyoruz, ama `.assetsignore` sayesinde Worker kodu, veritabanı şeması, ayar dosyaları ve `.github/` dışarıdan erişilemez. Yeni bir kök dosya/klasör eklersen ve herkese açık olmasını istemiyorsan `.assetsignore`'a yaz.
+
+**Kurulum / yayınlama**
+
+```
+npx wrangler d1 create mikroklima            # çıkan id'yi wrangler.toml içine yaz
+npx wrangler d1 execute mikroklima --remote --file=schema.sql
+npx wrangler secret put ADMIN_TOKEN          # en az 16 karakter
+npx wrangler deploy
+```
+
+Not: GitHub, 60 gün boyunca hareketsiz kalan depolarda zamanlanmış iş akışlarını kapatır. METAR verisi bir gün eskirse Actions sekmesinden `metar-tr` iş akışını yeniden etkinleştir. İş akışı, önceki veriyi indiremezse 72 saatlik geçmişi silmemek için bilerek hata verip durur.
+
+`sw.js` çevrimdışı çalışmayı sağlar. `index.html` içindeki `?v=` sürüm numaralarını değiştirdiğinde `sw.js` içindeki `SHELL` listesini ve `V` sürümünü de güncelle.
 
 ## <img src="docs/h-11.svg" alt="Gizlilik">
 

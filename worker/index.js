@@ -8,7 +8,10 @@ const CFG = {
     { name: '3 Günlük Paket',            short: '3 günlük', cost: 500 },
     { name: '7 Günlük Paket (Haftalık)', short: '7 günlük', cost: 1000 }
   ],
-  maxNewPerIp: 5          // aynı IP'den günde en fazla kaç yeni hesap
+  maxNewPerIp: 5,         // aynı IP'den günde en fazla kaç yeni hesap
+  adminFailPer10m: 8,     // aynı IP'den 10 dakikada en fazla kaç yanlış yönetici anahtarı denemesi
+  redeemPer10m: 20,       // bir hesabın 10 dakikada en fazla kaç kod denemesi
+  buyPer10m: 10           // bir hesabın 10 dakikada en fazla kaç satın alma isteği
 };
 
 const AB = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // 0/O ve 1/I karışmasın
@@ -45,6 +48,24 @@ const trNow = () => new Date(Date.now() + 3 * 3600e3).toISOString();   // Türki
 const today = () => trNow().slice(0, 10);
 const stamp = () => { const s = trNow(); return s.slice(0, 10) + ' ' + s.slice(11, 16); };
 const nowSec = () => Math.floor(Date.now() / 1000);
+
+/* ===== Hız sınırı (ipc tablosu: anahtar özetlenir, 10 dakikalık dilim) ===== */
+const slot = () => trNow().slice(0, 15);             // örn. 2026-11-09T12:3 → 10 dakikalık dilim
+async function rlKey(name, who) { return sha256hex('rl|' + name + '|' + slot() + '|' + who); }
+async function rlCount(env, name, who) {
+  const h = await rlKey(name, who);
+  const r = await env.DB.prepare('SELECT c FROM ipc WHERE h=? AND d=?').bind(h, slot()).first();
+  return r ? r.c : 0;
+}
+async function rlBump(env, name, who) {
+  const h = await rlKey(name, who);
+  await env.DB.prepare('INSERT INTO ipc(h,d,c) VALUES(?,?,1) ON CONFLICT(h,d) DO UPDATE SET c=c+1').bind(h, slot()).run();
+  if (rndInt(60) === 0) await gcIpc(env);
+}
+async function gcIpc(env) {                           // iki günden eski sayaçları sil (tarih karşılaştırması metin olarak çalışır)
+  await env.DB.prepare('DELETE FROM ipc WHERE d < ?').bind(new Date(Date.now() + 3 * 3600e3 - 2 * 86400e3).toISOString().slice(0, 10)).run();
+}
+const tooMany = () => fail('Çok fazla deneme. Birkaç dakika sonra tekrar dene.', 429);
 const normCode = v => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 const toInt = (v, min, max) => { const n = Math.floor(Number(String(v).replace(/\s/g, '').replace(',', '.'))); return isFinite(n) && n >= min && n <= max ? n : null; };
 
@@ -86,7 +107,7 @@ async function addLog(env, uid, kind, delta, ref) {
 async function init(req, env) {
   const ip = req.headers.get('CF-Connecting-IP') || 'x', d = today();
   const h = await sha256hex('ip|' + d + '|' + ip);
-  if (rndInt(40) === 0) await env.DB.prepare('DELETE FROM ipc WHERE d < ?').bind(new Date(Date.now() + 3 * 3600e3 - 2 * 86400e3).toISOString().slice(0, 10)).run();   // eski sayaçları ara sıra temizle (her seferinde taramak okuma harcar)
+  if (rndInt(40) === 0) await gcIpc(env);   // eski sayaçları ara sıra temizle (her seferinde taramak okuma harcar)
   await env.DB.prepare('INSERT INTO ipc(h,d,c) VALUES(?,?,1) ON CONFLICT(h,d) DO UPDATE SET c=c+1').bind(h, d).run();
   const c = await env.DB.prepare('SELECT c FROM ipc WHERE h=? AND d=?').bind(h, d).first();
   if (c && c.c > CFG.maxNewPerIp) return fail('Bu ağdan bugün çok fazla yeni hesap açıldı. Yarın tekrar dene.', 429);
@@ -112,6 +133,8 @@ async function claimDaily(env, id) {
 async function sync(req, env, u) { return json(await state(env, u.id, await claimDaily(env, u.id))); }
 
 async function buy(req, env, u, b) {
+  await rlBump(env, 'buy', u.id);
+  if ((await rlCount(env, 'buy', u.id)) > CFG.buyPer10m) return tooMany();
   const pk = CFG.packs[toInt(b.pack, 0, CFG.packs.length - 1)];
   if (!pk) return fail('Geçersiz paket.');
   const cam = String(b.cam || '').trim().slice(0, 60);
@@ -134,6 +157,8 @@ async function buy(req, env, u, b) {
 }
 
 async function redeem(req, env, u, b) {
+  await rlBump(env, 'redeem', u.id);
+  if ((await rlCount(env, 'redeem', u.id)) > CFG.redeemPer10m) return tooMany();
   const c = normCode(b.code);
   if (!/^[A-Z2-9]{13}$/.test(c)) return fail('Kod XXXX-XXXX-XXXXX biçiminde (13 harf/rakam).');
   const row = await env.DB.prepare('SELECT code,to_id,n,used_at FROM codes WHERE code=?').bind(c).first();
@@ -206,7 +231,9 @@ async function route(req, env) {
 
   if (path === '/api/init') return init(req, env);
   if (path.startsWith('/api/admin/')) {
-    if (!(await isAdmin(req, env))) return fail('Yönetici anahtarı yanlış.', 403);
+    const ip = req.headers.get('CF-Connecting-IP') || 'x';
+    if ((await rlCount(env, 'adm', ip)) >= CFG.adminFailPer10m) return tooMany();
+    if (!(await isAdmin(req, env))) { await rlBump(env, 'adm', ip); return fail('Yönetici anahtarı yanlış.', 403); }
     switch (path) {
       case '/api/admin/gift': return adminGift(env, b);
       case '/api/admin/add': return adminAdd(env, b);

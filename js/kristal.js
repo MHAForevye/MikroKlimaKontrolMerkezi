@@ -66,13 +66,33 @@
         reinit = true;
         try { localStorage.setItem(CFG.key + '_old', localStorage.getItem(CFG.key) || ''); } catch (x) {}
         creds = null; S = blank(); busy = false;
-        setTimeout(function () { toast('Hesabın sunucuda bulunamadı, yeni hesap açılıyor.'); }, 400);
+        setTimeout(function () { toast('Hesabın sunucuda bulunamadı, yeni hesap açılıyor. Eskisini Mağaza sayfasından geri yükleyebilirsin.'); }, 400);
         return sync();
       }
       if (e.net || !e.status) offline = true;
       else if (e.status === 429) toast(e.message);
       render();
     }).then(function () { busy = false; }, function () { busy = false; });
+  }
+
+  /* ===== Eski hesabı geri yükleme: sunucu 401 verince eski kimlik '_old' anahtarına yedeklenir ===== */
+  function oldCreds() {
+    try {
+      var o = JSON.parse(localStorage.getItem(CFG.key + '_old'));
+      if (o && /^\d{8}$/.test(String(o.id)) && /^[A-Za-z0-9_-]{20,64}$/.test(String(o.token)) && (!creds || creds.id !== String(o.id))) return { id: String(o.id), token: String(o.token) };
+    } catch (e) {}
+    return null;
+  }
+  function restoreOld() {
+    var o = oldCreds(); if (!o) return;
+    if (!confirm('Şu anki hesabın (ID ' + S.id + ') yerine önceki hesabın (ID ' + o.id + ') yüklensin mi? Şu anki hesabın anahtarı silinir; yeni hesapta kristal biriktirdiysen kaybolur.')) return;
+    var cur = creds; creds = o;
+    api('/sync').then(function (d) {
+      try { localStorage.removeItem(CFG.key + '_old'); } catch (x) {}
+      apply(d); render(); toast('Önceki hesap yüklendi. Bakiye: ' + S.bal);
+    }, function (e) {
+      creds = cur; toast(e.status === 401 ? 'Önceki hesap sunucuda da bulunamadı.' : e.message);
+    });
   }
 
   /* ===== Gizli kelime (sadece yönetici bölümünü açar) ===== */
@@ -189,7 +209,8 @@
   /* ===== Ekran ===== */
   function render() {
     if (!$('storePage')) return;
-    if ($('kVer')) $('kVer').textContent = 'kristal.js v8 yüklü (sunucu)';
+    if ($('kVer')) $('kVer').textContent = 'kristal.js v9 yüklü (sunucu)';
+    if ($('kOldWrap')) $('kOldWrap').hidden = !oldCreds();
     $('kBal').textContent = S.bal;
     $('kId').textContent = S.id;
     if (document.activeElement !== $('kCamId')) $('kCamId').value = S.cam;
@@ -272,6 +293,7 @@
       $('kOwner').hidden = false;
       $('kOwner').scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
+    if ($('kRestoreOld')) $('kRestoreOld').addEventListener('click', restoreOld);
     $('kGiftAdd').addEventListener('click', giftAdd);
     $('kGiftMake').addEventListener('click', giftMake);
     $('kVerBtn').addEventListener('click', verify);
