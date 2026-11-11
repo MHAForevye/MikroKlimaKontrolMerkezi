@@ -30,7 +30,7 @@
   <meta name="apple-mobile-web-app-title" content="Mikro-Klima">
   <script src="js/theme.js?v=368b16f2"></script>
   
-  <link rel="stylesheet" href="css/fonts.css?v=f1b34a86"><link rel="stylesheet" href="css/style.css?v=16271c61"><link rel="stylesheet" href="css/classic.css?v=222beb74"><link rel="stylesheet" href="css/sade.css?v=746e927a">
+  <link rel="stylesheet" href="css/fonts.css?v=f1b34a86"><link rel="stylesheet" href="css/style.css?v=1db274c7"><link rel="stylesheet" href="css/classic.css?v=961cd952"><link rel="stylesheet" href="css/sade.css?v=fd3c81c7">
   <script src="lib/chart.umd.min.js"></script>
 <script data-goatcounter="https://havadurumu.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
 </head>
@@ -41,9 +41,8 @@
 <div class="container">
   <header class="topbar">
     <div class="topbar-row">
-      <h1><span class="ico" data-ico="sun" style="--s:28px"></span>Mikro-Klima Kontrol Merkezi</h1>
+      <h1><img class="brand-logo" src="icon.png" width="48" height="48" alt="">Mikro-Klima Kontrol Merkezi</h1>
       <div class="top-actions">
-        <button id="btnSeri" class="icon-btn seri-btn" type="button" aria-haspopup="dialog" aria-label="Giriş serisi" title="Giriş serin"><span class="seri-fl" id="seriFlame"></span><span class="seri-n" id="seriN">1</span></button>
         <button id="btnShare" class="icon-btn" aria-label="Konumu ve saati paylaş" title="Bu görünümü paylaş" data-act="shareCurrentView"><span style="font-size:18px">🔗</span></button>
         <button id="btnFaq" class="icon-btn" aria-label="Sık sorulan sorular" title="Sık sorulan sorular"><span class="ico" data-ico="faq" style="--s:28px"></span></button>
         <button id="btnRefresh" class="icon-btn" aria-label="Verileri yenile" title="Yenile"><span class="ico" data-ico="refresh" style="--s:22px"></span></button>
@@ -267,13 +266,7 @@
 
       <div class="card wide">
         <h2 class="card-title">Mağaza</h2>
-        <button id="btnStore" class="setting-btn"><span class="ico" data-ico="gem" style="--s:22px"></span>Mağazayı aç</button>
-      </div>
-
-      <div class="card wide">
-        <h2 class="card-title">Seri ateşi</h2>
-        <button type="button" id="seriToggle" class="setting-btn" aria-pressed="true"><span class="seri-mini" id="seriMini"></span>Seri ateşini göster<span class="state" id="seriToggleSt">açık</span></button>
-        <p class="hint" style="margin:10px 0 0">Uygulamayı üst üste kaç gün açtığını sayar. Yalnızca bu cihazda tutulur, istemezsen kapatabilirsin.</p>
+        <button id="btnStore" class="setting-btn"><span class="ico" data-ico="gem" style="--s:22px"></span>Mağazayı aç<span class="state seri-st" id="seriSt" hidden></span></button>
       </div>
 
       <div class="card wide">
@@ -337,22 +330,9 @@
     </div>
 
     <h3 class="studio-sec">Diğer uygulamalar</h3>
-    <div class="card studio-card app-list"><a href="https://mhaforevye.github.io/pano/" target="_blank" rel="noopener"><b>Mantar Pano</b><small>Fotoğraf, not ve iplerle çalışma panosu</small></a></div>
+    <div class="card studio-card app-list"><a href="https://frovyes.github.io/mantarpano/" target="_blank" rel="noopener"><b>Mantar Pano</b><small>Fotoğraf, not ve iplerle çalışma panosu</small></a></div>
 
     <p class="studio-foot">© Forevye</p>
-  </div>
-</div>
-
-<div class="seri-ov" id="seriOv" role="dialog" aria-modal="true" aria-labelledby="seriTtl" hidden>
-  <div class="seri-card">
-    <div class="seri-big" id="seriBig"></div>
-    <div class="seri-num" id="seriNum">1</div>
-    <h2 class="seri-ttl" id="seriTtl">günlük seri</h2>
-    <p class="seri-msg" id="seriMsg"></p>
-    <div class="seri-week" id="seriWeek"></div>
-    <div class="seri-stats" id="seriStats"></div>
-    <button type="button" class="setting-btn" id="seriStore"><span class="ico" data-ico="gem" style="--s:22px"></span>Mağazayı aç</button>
-    <button type="button" class="setting-btn" id="seriClose">Tamam</button>
   </div>
 </div>
 
@@ -364,6 +344,16 @@
       <span class="ico" data-ico="gem"></span>
       <h2 class="sh-title">Mağaza</h2>
       <p class="studio-sub">Siteyi her gün açtığında <b>30 kristal</b> kazanırsın. Kristallerle Astrophoto Cam için aktivasyon kodu alabilirsin.</p>
+    </div>
+
+    <h3 class="studio-sec">Seri ateşin</h3>
+    <div class="card studio-card seri-card" id="seriCard">
+      <div class="seri-row">
+        <div class="seri-big" id="seriBig"></div>
+        <div><div class="seri-num"><span id="seriNum">1</span> <small>gün üst üste</small></div><p class="seri-msg" id="seriMsg"></p></div>
+      </div>
+      <div class="seri-week" id="seriWeek"></div>
+      <div class="seri-stats" id="seriStats"></div>
     </div>
 
     <h3 class="studio-sec">Hesabım</h3>
@@ -441,6 +431,6 @@
 <script src="js/core.js?v=2a6cb63a"></script>
 <script src="js/app.js?v=05f0f8af"></script>
 <script src="js/kristal.js?v=19a0e8ac"></script>
-<script src="js/seri.js?v=1d58928d"></script>
+<script src="js/seri.js?v=eae400f8"></script>
 </body>
 </html>

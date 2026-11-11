@@ -1,14 +1,19 @@
 # Bu sürümde değişenler
 
-## Seri ateşi (yeni)
-- Üst çubukta hafif animasyonlu mavi alev + gün sayısı. Uygulamayı üst üste kaç gün açtığını sayar; dokununca 7 günlük özet, en uzun seri ve kalkan durumu açılır.
-- Korkutmayan tasarım: kaçırılan gün için uyarı/bildirim yok. Her 7. günde bir **kalkan** kazanılır, tek gün kaçırılırsa seri korunur. Kalkan yokken seri sessizce 1'e döner, en uzun seri saklanır.
-- Pencere kendiliğinden sadece 3, 7, 14, 30, 50, 100, 200, 365. günde açılır. Ayarlar > Seri ateşi ile tamamen kapatılır. Hareket azaltma tercihi olanlarda animasyon durur.
-- Tamamen yerel (`mk_seri`, localStorage). Sunucuya, kristallere, Worker'a dokunulmadı. Hesap mantığı `js/core.js` (`seriNext`), arayüz yeni `js/seri.js`. 9 yeni test.
-- Gizlilik politikasına tek cümle eklendi. `bump-version.mjs` ve `sw.js` yeni dosyayı tanıyor.
+## Seri ateşi (Mağaza'da)
+- Mağaza sayfasının üstünde hafif animasyonlu mavi alev, kaç gün üst üste açıldığı ve son 7 günün işaretleri. Ayarlar > Mağaza düğmesinde de küçük alev + gün sayısı görünür.
+- Baskı yok: üst çubukta alev, açılır pencere, uyarı ya da "seri bozuldu" dili kalmadı. Sadece olumlu mesajlar ("Bugün de buradasın", "Tekrar hoş geldin"). Tek gün kaçırılırsa seri sessizce korunur (her 7. günde bir kalkan, ekranda yazmaz).
+- Tamamen yerel (`mk_seri`, localStorage). Sunucuya, kristallere, Worker'a dokunulmadı. Mantık `js/core.js` (`seriNext`, 9 test), arayüz `js/seri.js`.
+
+## Logo ve ikonlar
+- Başlıkta küçük güneş yerine uygulamanın şemsiyeli logosu (`icon.png`), 48 px, beyaz zeminli, mavi halkalı.
+- Klasik/Sade: ikonlar keskin çiziliyor (karanlık temada boya filtresi bulanıktı), kart başlığı ikonları 28 px. Karanlık temada açık dolgulu küçük ikonlar (SSS, takvim, saat) açık rozet üstünde.
+
+## Masaüstü (Sade)
+- Başlık 1200 px, içerik 620 px idi; şimdi hepsi tek, ortalanmış 680 px sütunda. İçerik yatay yarım kalmıyor.
 
 ## Diğer uygulamalar
-- Stüdyo sayfasında liste yerine **Mantar Pano** bağlantısı (https://mhaforevye.github.io/pano/, yeni sekmede açılır).
+- Stüdyo sayfasında **Mantar Pano** bağlantısı (https://frovyes.github.io/mantarpano/, yeni sekmede).
 
 ---
 

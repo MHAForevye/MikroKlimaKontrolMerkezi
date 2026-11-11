@@ -62,3 +62,14 @@ html:is([data-skin="classic"],[data-skin="sade"])[data-theme] .faq-wrap details 
 html:is([data-skin="classic"],[data-skin="sade"])[data-theme] .faq-wrap details p { color:var(--subtext); }
 html:is([data-skin="classic"],[data-skin="sade"])[data-theme] .credit-line button { background:none; box-shadow:none; }
 html:is([data-skin="classic"],[data-skin="sade"])[data-theme] #offBar { background:rgba(245,158,11,.25); color:var(--text); }
+/* Klasik ve Sade: ikonlar keskin çizilir (karanlık temada boya filtresi bulanık görünüyordu); kart başlığı ikonları daha büyük */
+html:is([data-skin="classic"],[data-skin="sade"]) .ico svg g[filter] { filter:none; }
+html:is([data-skin="classic"],[data-skin="sade"]) .ico svg ellipse { opacity:.32; }
+html:is([data-skin="classic"],[data-skin="sade"]) .src-head > .ico { --s:28px !important; }
+html:is([data-skin="classic"],[data-skin="sade"]) .info-btn .ico, html:is([data-skin="classic"],[data-skin="sade"]) .help-btn .ico { opacity:.8; }
+
+/* Klasik/Sade karanlık tema: açık dolgulu küçük ikonlar (SSS, takvim, saat...) açık zeminli rozet üstünde koyu çizgiyle çizilir; yoksa detay kaybolur */
+html[data-theme="dark"]:is([data-skin="classic"],[data-skin="sade"]) :is(.top-actions, .mode-btn, .sel-hint, .hour-strip-title, .src-head, .card-title) > .ico:not(.big) { background:#f3e8d4; border-radius:8px; padding:2px; box-sizing:content-box; }
+html[data-theme="dark"]:is([data-skin="classic"],[data-skin="sade"]) :is(.top-actions, .mode-btn, .sel-hint, .hour-strip-title, .src-head, .card-title) .ico:not(.big) svg g[stroke="#4a3426"] { stroke:#4a3426; }
+html[data-theme="dark"]:is([data-skin="classic"],[data-skin="sade"]) :is(.top-actions, .mode-btn, .sel-hint, .hour-strip-title, .src-head, .card-title) .ico:not(.big) svg [fill="#4a3426"] { fill:#4a3426; }
+html[data-theme="dark"]:is([data-skin="classic"],[data-skin="sade"]) :is(.top-actions, .mode-btn, .sel-hint, .hour-strip-title, .src-head, .card-title) .ico:not(.big) svg ellipse { opacity:0; }

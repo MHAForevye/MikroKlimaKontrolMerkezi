@@ -10,7 +10,6 @@ main:focus { outline: none; }
 
 /* Sade görünüm: Klasik'in renkleri, daha az öğe, büyük yazı, düz dil */
 html[data-skin="sade"] body { font-size: 17px; line-height: 1.5; }
-html[data-skin="sade"] main { max-width: 620px; margin-inline: auto; }
 html[data-skin="sade"] #heroTemp { font-size: clamp(72px, 24vw, 104px); line-height: 1; }
 html[data-skin="sade"] .sade-line { display: block; margin-top: 14px; padding: 12px 14px; border-radius: 14px; font-size: 1.1em; font-weight: 600; background: color-mix(in srgb, var(--accent) 12%, transparent); }
 html[data-skin="sade"] #heroStats,
@@ -22,3 +21,14 @@ html[data-skin="sade"] .tabbar .tab { flex: 1; }
 html[data-skin="sade"] :is(button, select, input, a, [role="button"], [role="tab"]):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 html[data-skin="sade"] :is(.setting-btn, .tab, .mode-btn, select) { min-height: 48px; }
 html[data-skin="sade"][data-skin][data-theme="light"] { --accent: #0369a1; }
+
+/* Sade masaüstü: başlık ve içerik aynı tek sütunda (eskiden başlık 1200 px, içerik 620 px idi) */
+html[data-skin="sade"] .container { max-width: 680px; }
+html[data-skin="sade"] :is(#panel-today, #panel-detail, #panel-settings).active { display: flex; flex-direction: column; align-items: stretch; }
+html[data-skin="sade"] .tabbar-inner { max-width: 680px; }
+@media (min-width: 900px) {
+  html[data-skin="sade"] body { padding-top: 6px; }
+  html[data-skin="sade"] .card { box-shadow: 0 1px 3px rgba(15,23,42,.08); }
+  html[data-skin="sade"] .brand-logo { width: 56px; height: 56px; }
+}
+

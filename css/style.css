@@ -557,7 +557,6 @@
 .credit-line a { display:inline-block; color:var(--subtext); font-size:.95rem; padding:12px 14px; min-height:46px; }
 
 body.share-presentation { padding-bottom:calc(18px + env(safe-area-inset-bottom,0px)); }
-body.share-presentation .top-actions #btnSeri,
 body.share-presentation .top-actions #btnShare,
 body.share-presentation .top-actions #btnFaq,
 body.share-presentation .loc-row,
@@ -600,7 +599,7 @@ body.share-presentation #sharedHomeLink { display:block; align-self:center; padd
   .icon-btn { width:42px; height:42px; }
 }
 
-/* ===== Seri ateşi: hafif animasyonlu mavi alev (hareket azaltma tercihi yukarıdaki kuralla kapanır) ===== */
+/* ===== Seri ateşi (Mağaza sayfasında): hafif animasyonlu mavi alev; hareket azaltma tercihi yukarıdaki kuralla animasyonu kapatır ===== */
 .flame { display:block; width:100%; height:100%; overflow:visible; filter:drop-shadow(0 0 5px rgba(56,189,248,.55)); }
 .flame .fl-o { fill:#2563eb; } .flame .fl-m { fill:#38bdf8; } .flame .fl-c { fill:#e0f2fe; }
 .flame .fl-o, .flame .fl-m, .flame .fl-c { transform-box:fill-box; transform-origin:50% 100%; animation:seriFlick 1.7s ease-in-out infinite; }
@@ -610,33 +609,29 @@ body.share-presentation #sharedHomeLink { display:block; align-self:center; padd
 .flame .sp2 { fill:#bae6fd; animation-delay:-1.3s; }
 @keyframes seriFlick { 0%,100% { transform:scale(1,1) skewX(0); } 30% { transform:scale(.96,1.07) skewX(-2.5deg); } 60% { transform:scale(1.03,.95) skewX(2deg); } 80% { transform:scale(.98,1.04) skewX(-1deg); } }
 @keyframes seriSpark { 0% { opacity:0; transform:translateY(0); } 15% { opacity:.9; } 100% { opacity:0; transform:translateY(-12px); } }
-.seri-btn { position:relative; }
-.seri-btn[hidden] { display:none; }
-.seri-fl { display:block; width:24px; height:29px; }
-.seri-n { position:absolute; right:0; bottom:0; min-width:18px; height:18px; padding:0 4px; box-sizing:border-box; border-radius:9px; background:#1d4ed8; color:#fff; border:1.5px solid var(--bg); font:700 .72rem/15px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; text-align:center; }
-.seri-btn.pop .seri-fl { animation:seriPop .9s cubic-bezier(.2,1.4,.4,1) 1; }
-@keyframes seriPop { 0% { transform:scale(.55); } 60% { transform:scale(1.25); } 100% { transform:scale(1); } }
-.seri-mini { display:inline-block; width:18px; height:22px; flex:none; }
-#seriToggle.off .seri-mini .flame { filter:grayscale(1); opacity:.5; }
-#seriToggle.off .seri-mini .flame * { animation:none; }
-
-.seri-ov { position:fixed; inset:0; z-index:70; background:rgba(15,23,42,.55); display:flex; align-items:center; justify-content:center; padding:16px; animation:fadeIn .2s ease; }
-.seri-ov[hidden] { display:none; }
-.seri-card { width:100%; max-width:360px; max-height:100%; overflow-y:auto; background:var(--card-bg); color:var(--text); border:2px solid var(--ink,var(--border)); border-radius:18px; padding:22px 18px 16px; text-align:center; }
-.seri-big { width:68px; height:82px; margin:0 auto 6px; }
-.seri-num { font-size:2.8rem; line-height:1; font-weight:700; color:#1d4ed8; }
+@keyframes seriPop { 0% { transform:scale(.55); } 60% { transform:scale(1.2); } 100% { transform:scale(1); } }
+.seri-row { display:flex; align-items:center; gap:16px; }
+.seri-big { width:58px; height:70px; flex:none; }
+.seri-big.pop { animation:seriPop .9s cubic-bezier(.2,1.4,.4,1) 1; }
+.seri-num { font-size:2.5rem; line-height:1; font-weight:700; color:#1d4ed8; }
+.seri-num small { font-size:1rem; font-weight:600; color:var(--subtext); }
 html[data-theme="dark"] .seri-num { color:#7dd3fc; }
-.seri-ttl { margin:4px 0 0; font-size:1.05rem; font-weight:700; color:var(--text); }
-.seri-msg { margin:10px 0 0; font-size:1rem; line-height:1.45; color:var(--text); }
-.seri-week { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin:16px 0 8px; }
+.seri-msg { margin:8px 0 0; font-size:1rem; line-height:1.4; color:var(--text); }
+.seri-week { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin:16px 0 6px; text-align:center; }
 .seri-d { position:relative; font-size:.78rem; color:var(--subtext); }
 .seri-d i { display:block; width:26px; height:26px; margin:4px auto 0; border-radius:50%; box-sizing:border-box; border:2px dashed var(--subtext); }
 .seri-d.on { color:var(--text); font-weight:700; }
 .seri-d.on i { background:#38bdf8; border:2px solid #1d4ed8; }
 .seri-d.today b { text-decoration:underline; }
 .seri-sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
-.seri-stats { font-size:.92rem; line-height:1.5; color:var(--subtext); margin:6px 0 14px; }
-.seri-card .setting-btn { width:100%; margin-top:8px; justify-content:center; }
+.seri-stats { font-size:.92rem; line-height:1.5; color:var(--subtext); }
+.seri-st { display:inline-flex; align-items:center; gap:4px; color:#1d4ed8; }
+html[data-theme="dark"] .seri-st { color:#7dd3fc; }
+.seri-st .flame-mini { display:inline-block; width:14px; height:17px; }
 .app-list a { display:block; padding:8px 0; color:var(--ink,var(--text)); text-decoration:none; }
 .app-list a b { font-size:1.15rem; text-decoration:underline; text-decoration-thickness:2px; text-underline-offset:4px; }
 .app-list a small { display:block; margin-top:2px; font-size:.88rem; color:var(--subtext); }
+
+/* ===== Logo: başlıkta belirgin ===== */
+.brand-logo { width:48px; height:48px; flex:none; border-radius:50%; background:#fff; padding:2px; box-sizing:border-box; box-shadow:0 0 0 2px #0284c7, 0 3px 10px rgba(2,132,199,.4); }
+@media (max-width:420px) { .brand-logo { width:42px; height:42px; } }

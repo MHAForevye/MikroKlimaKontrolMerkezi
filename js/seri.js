@@ -1,19 +1,14 @@
-/* Giriş serisi ("seri ateşi"): uygulamayı üst üste kaç gün açtığını sayar, mavi bir alevle gösterir.
+/* Seri ateşi: uygulamayı üst üste kaç gün açtığını sayar ve Mağaza sayfasında hafif animasyonlu mavi bir alevle gösterir.
    Tamamen yerel (localStorage 'mk_seri'); sunucuya, kristal hesabına ve ödüllere dokunmaz. Hesap mantığı js/core.js (seriNext).
-   Baskı yok: kaçırılan gün için uyarı, bildirim ya da otomatik pencere yok. Pencere sadece 3/7/14/30... gün dönüm noktalarında kendiliğinden açılır.
-   Ayarlar > Seri ateşi ile tamamen gizlenebilir. */
+   Bilerek baskısız: pencere, bildirim, uyarı ya da "seri bozuldu" dili yok. Sadece olumlu şeyler gösterilir.
+   (core.js'teki kalkan sessizce çalışır: tek gün kaçırılırsa seri korunur, bunu ekrana yazmayız.) */
 (function () {
   'use strict';
-  var KEY = 'mk_seri', OFF = 'mk_seri_off', MILES = [3, 7, 14, 30, 50, 100, 200, 365];
+  var KEY = 'mk_seri';
   var DAYS = ['Pz', 'Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct'];
-  var MSG = {
-    start: 'İlk gün! Yarın da uğrarsan seri büyür.',
-    up: 'Bugün de buradasın. Güzel gidiyor.',
-    saved: 'Dün uğrayamadın, kalkanın seriyi korudu.',
-    reset: 'Seri yeniden başladı, sorun değil.'
-  };
+  var MSG = { start: 'İlk gün, hoş geldin!', up: 'Bugün de buradasın.', saved: 'Bugün de buradasın.', reset: 'Tekrar hoş geldin!' };
   var $ = function (id) { return document.getElementById(id); };
-  var st = null, changed = false, gotShield = false, lastFocus = null, timer = 0;
+  var st = null, changed = false;
 
   function flame(cls) {
     return '<svg class="flame ' + (cls || '') + '" viewBox="0 0 32 40" aria-hidden="true" focusable="false">' +
@@ -26,92 +21,37 @@
   function todayStr() { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
   function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) {} }
-  function isOff() { try { return localStorage.getItem(OFF) === '1'; } catch (e) { return false; } }
-  function setOff(v) { try { localStorage.setItem(OFF, v ? '1' : '0'); } catch (e) {} }
   function dayName(s) { return DAYS[(seriDayNum(s) + 4) % 7]; }   // 1970-01-01 Perşembe
 
   function tick() {
     var r = seriNext(load(), todayStr());
-    st = r.st; changed = r.ev !== 'same'; gotShield = r.gotShield;
+    st = r.st; changed = r.ev !== 'same';
     if (changed) save();
-    return r;
   }
 
   function paint() {
-    var off = isOff(), b = $('btnSeri');
-    if (!b || !st) return;
-    b.hidden = off;
-    $('seriN').textContent = st.n;
-    b.setAttribute('aria-label', 'Giriş serisi: ' + st.n + ' gün. Ayrıntı için aç.');
-    b.title = st.n + ' günlük seri';
-    var t = $('seriToggle');
-    if (t) { t.classList.toggle('off', off); t.setAttribute('aria-pressed', off ? 'false' : 'true'); $('seriToggleSt').textContent = off ? 'kapalı' : 'açık'; }
-    if (!$('seriOv').hidden) fill();
-  }
-
-  function fill() {
-    var today = todayStr(), msg = MSG[st.ev] || MSG.up;
-    if (st.ev === 'reset' && st.best > 1) msg += ' En uzun serin ' + st.best + ' gün.';
-    if (changed && MILES.indexOf(st.n) >= 0 && st.ev !== 'reset') msg = st.n + ' gün üst üste! ' + msg;
-    if (gotShield) msg += ' Kalkan kazandın.';
+    if (!st || !$('seriCard')) return;
+    var today = todayStr(), w = '';
     $('seriBig').innerHTML = flame('');
     $('seriNum').textContent = st.n;
-    $('seriTtl').textContent = 'günlük seri';
-    $('seriMsg').textContent = msg;
-    var w = '';
+    $('seriMsg').textContent = MSG[st.ev] || MSG.up;
     for (var i = 6; i >= 0; i--) {
       var d = seriAddDays(today, -i), on = st.h.indexOf(d) >= 0;
       w += '<div class="seri-d' + (on ? ' on' : '') + (i === 0 ? ' today' : '') + '"><b>' + dayName(d) + '</b><i></i><span class="seri-sr">' + (on ? 'girdin' : 'girmedin') + '</span></div>';
     }
     $('seriWeek').innerHTML = w;
-    $('seriStats').textContent = 'En uzun serin: ' + st.best + ' gün. ' + (st.shield
-      ? 'Kalkanın hazır: bir gün uğramasan da seri korunur.'
-      : 'Her 7. günde bir kalkan kazanırsın; kalkan bir gün uğramasan da seriyi korur.') + ' Her giriş günü Mağaza\'da kristal birikir.';
+    $('seriStats').textContent = 'En uzun serin: ' + st.best + ' gün. Siteyi her açtığın gün Mağaza\'da kristal birikir.';
+    var b = $('seriSt');   // Ayarlar > Mağaza düğmesinde küçük alev + gün sayısı
+    if (b) { b.hidden = false; b.innerHTML = '<span class="flame-mini">' + flame('') + '</span>' + st.n + ' gün'; }
+    if (changed) { $('seriBig').classList.remove('pop'); void $('seriBig').offsetWidth; $('seriBig').classList.add('pop'); }
   }
-
-  function trap(e) {
-    if ($('seriOv').hidden) return;
-    if (e.key === 'Escape') { close(); return; }
-    if (e.key !== 'Tab') return;
-    var f = $('seriOv').querySelectorAll('button:not([hidden])'); if (!f.length) return;
-    var a = f[0], z = f[f.length - 1];
-    if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); }
-    else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
-  }
-  function open() {
-    if (!st) return;
-    lastFocus = document.activeElement;
-    fill(); $('seriOv').hidden = false; document.body.style.overflow = 'hidden'; $('seriClose').focus();
-  }
-  function close() {
-    $('seriOv').hidden = true; document.body.style.overflow = '';
-    changed = false; gotShield = false;   // dönüm noktası mesajı bir kez gösterilir
-    if (lastFocus && lastFocus.focus && document.contains(lastFocus)) lastFocus.focus();
-  }
-  function busy() { return !!document.querySelector('.studio-page.show, .info-sheet.show') || document.body.classList.contains('share-presentation'); }
 
   function init() {
-    if (!$('btnSeri') || !$('seriOv')) return;
-    $('seriFlame').innerHTML = flame('');
-    $('seriMini').innerHTML = flame('');
     tick(); paint();
-    if (changed && !isOff()) {
-      $('btnSeri').classList.add('pop');
-      if (MILES.indexOf(st.n) >= 0 && st.ev !== 'reset') timer = setTimeout(function () { if (!busy()) open(); }, 1200);
-    }
-    $('btnSeri').addEventListener('click', open);
-    $('seriClose').addEventListener('click', close);
-    $('seriOv').addEventListener('click', function (e) { if (e.target === this) close(); });
-    $('seriStore').addEventListener('click', function () {
-      lastFocus = null; close();
-      var s = $('btnStore'); if (s) s.click();
-    });
-    document.addEventListener('keydown', trap);
-    $('seriToggle').addEventListener('click', function () { setOff(!isOff()); paint(); });
+    var s = $('btnStore');
+    if (s) s.addEventListener('click', function () { if (st) { changed = true; paint(); changed = false; } });   // alev, Mağaza her açıldığında küçük bir "pop" yapar
     document.addEventListener('visibilitychange', function () {   // sekme gece yarısından sonra tekrar açılırsa yeni gün say
-      if (document.visibilityState !== 'visible' || !$('seriOv').hidden) return;
-      var old = st.last; tick(); paint();
-      if (st.last !== old && !isOff()) { $('btnSeri').classList.remove('pop'); void $('btnSeri').offsetWidth; $('btnSeri').classList.add('pop'); }
+      if (document.visibilityState === 'visible') { tick(); paint(); }
     });
   }
 
