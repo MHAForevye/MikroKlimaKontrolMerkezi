@@ -4,7 +4,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
-const TRACKED = ['css/fonts.css', 'css/style.css', 'css/classic.css', 'css/sade.css', 'js/theme.js', 'js/core.js', 'js/app.js', 'js/kristal.js'];
+const TRACKED = ['css/fonts.css', 'css/style.css', 'css/classic.css', 'css/sade.css', 'js/theme.js', 'js/core.js', 'js/app.js', 'js/kristal.js', 'js/seri.js'];
 const hash = s => createHash('sha1').update(s).digest('hex').slice(0, 8);
 const ver = {};
 for (const p of TRACKED) ver[p] = hash(readFileSync(p));

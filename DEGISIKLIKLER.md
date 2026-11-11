@@ -1,5 +1,17 @@
 # Bu sürümde değişenler
 
+## Seri ateşi (yeni)
+- Üst çubukta hafif animasyonlu mavi alev + gün sayısı. Uygulamayı üst üste kaç gün açtığını sayar; dokununca 7 günlük özet, en uzun seri ve kalkan durumu açılır.
+- Korkutmayan tasarım: kaçırılan gün için uyarı/bildirim yok. Her 7. günde bir **kalkan** kazanılır, tek gün kaçırılırsa seri korunur. Kalkan yokken seri sessizce 1'e döner, en uzun seri saklanır.
+- Pencere kendiliğinden sadece 3, 7, 14, 30, 50, 100, 200, 365. günde açılır. Ayarlar > Seri ateşi ile tamamen kapatılır. Hareket azaltma tercihi olanlarda animasyon durur.
+- Tamamen yerel (`mk_seri`, localStorage). Sunucuya, kristallere, Worker'a dokunulmadı. Hesap mantığı `js/core.js` (`seriNext`), arayüz yeni `js/seri.js`. 9 yeni test.
+- Gizlilik politikasına tek cümle eklendi. `bump-version.mjs` ve `sw.js` yeni dosyayı tanıyor.
+
+## Diğer uygulamalar
+- Stüdyo sayfasında liste yerine **Mantar Pano** bağlantısı (https://mhaforevye.github.io/pano/, yeni sekmede açılır).
+
+---
+
 ## Kurulum: üzerine yazarken
 - Zip'i repo köküne çıkar, üzerine yaz. **Eski kök `app.js`'i elle sil** (artık tek kaynak `js/app.js`).
 - `.assetsignore` gizli dosyadır, çıkarken üzerine yazıldığından emin ol.

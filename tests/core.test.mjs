@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-const { catOf, scoreOf, MEAN, MED, wmed, escHtml, rtWhen, sadeText } = createRequire(import.meta.url)('../js/core.js');
+const { catOf, scoreOf, MEAN, MED, wmed, escHtml, rtWhen, sadeText, seriNext, seriAddDays, seriDayDiff } = createRequire(import.meta.url)('../js/core.js');
 
 const dry = { hum: 40, temp: 25, dew: 5, cloud: 0, pop: 0, cape: 0, precip: 0, code: 0 };
 
@@ -78,3 +78,43 @@ test('sadeText: öğüt vermez (şemsiye, öneri vb. yok)', () => {
   const outs = [[5, 10], [20, 55], [90, 90]].flatMap(p => [sadeText(p.map((x, i) => ({ hh: '1' + i, pop: x, precip: 0 }))), sadeText(p.map((x, i) => ({ hh: '1' + i, pop: x, precip: i ? 1 : 0 })))]);
   for (const o of outs) assert.ok(!/şemsiye|öner|yanına/i.test(o), o);
 });
+
+/* ===== Giriş serisi ===== */
+const run = (days) => days.reduce((o, d) => { const r = seriNext(o && o.st, d); r.ev0 = r.ev; return r; }, null);
+test('seri: ilk giriş 1 gün', () => { const r = seriNext(null, '2026-11-10'); assert.equal(r.st.n, 1); assert.equal(r.ev, 'start'); });
+test('seri: aynı gün tekrar açmak seriyi artırmaz', () => {
+  const a = seriNext(null, '2026-11-10'), b = seriNext(a.st, '2026-11-10');
+  assert.equal(b.st.n, 1); assert.equal(b.ev, 'same');
+});
+test('seri: ardışık günler artar, ay ve yıl sınırında da', () => {
+  assert.equal(run(['2026-12-30', '2026-12-31', '2027-01-01', '2027-01-02']).st.n, 4);
+  assert.equal(run(['2028-02-28', '2028-02-29', '2028-03-01']).st.n, 3);   // artık yıl
+});
+test('seri: kalkan yokken kaçırılan gün seriyi sıfırlar, en uzun seri kalır', () => {
+  const r = run(['2026-11-01', '2026-11-02', '2026-11-03', '2026-11-05']);
+  assert.equal(r.st.n, 1); assert.equal(r.ev, 'reset'); assert.equal(r.st.best, 3);
+});
+test('seri: 7. günde kalkan kazanılır, tek kaçırılan günde seri korunur ve kalkan harcanır', () => {
+  const days = Array.from({ length: 7 }, (_, i) => seriAddDays('2026-11-01', i));
+  const w = run(days); assert.equal(w.st.n, 7); assert.equal(w.st.shield, 1); assert.equal(w.gotShield, true);
+  const s = seriNext(w.st, seriAddDays('2026-11-07', 2));
+  assert.equal(s.ev, 'saved'); assert.equal(s.st.n, 8); assert.equal(s.st.shield, 0);
+  assert.ok(s.st.h.includes('2026-11-08'));
+  const again = seriNext(s.st, seriAddDays('2026-11-09', 2));   // ikinci kaçırma: kalkan yok
+  assert.equal(again.st.n, 1);
+});
+test('seri: kalkan iki gün kaçırmayı korumaz', () => {
+  const days = Array.from({ length: 7 }, (_, i) => seriAddDays('2026-11-01', i));
+  assert.equal(seriNext(run(days).st, '2026-11-10').st.n, 1);
+});
+test('seri: saat geri alınırsa seri bozulmaz', () => {
+  const a = seriNext(seriNext(null, '2026-11-10').st, '2026-11-11');
+  const b = seriNext(a.st, '2026-11-08'); assert.equal(b.st.n, 2); assert.equal(b.ev, 'same');
+});
+test('seri: bozuk kayıt çökmez, yeniden başlar', () => {
+  for (const bad of [{}, 'x', { n: -4, last: '2026-11-10' }, { n: 3, last: 'dün' }, [], 7])
+    assert.equal(seriNext(bad, '2026-11-10').st.n, 1);
+  const r = seriNext({ n: 3, last: '2026-11-09', h: ['<img>', '2026-11-09'], ev: '<x>', shield: 'evet' }, '2026-11-10');
+  assert.deepEqual(r.st.h, ['2026-11-09', '2026-11-10']); assert.equal(r.st.n, 4);
+});
+test('seri: gün farkı ve ekleme tutarlı', () => { assert.equal(seriDayDiff('2026-02-27', '2026-03-01'), 2); assert.equal(seriAddDays('2026-12-31', 1), '2027-01-01'); });
