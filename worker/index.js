@@ -4,6 +4,8 @@
 
 const CFG = {
   daily: 30,
+  streakEvery: 7,         // seri her bu kadar günde bir ödül verir
+  streakBonus: 60,        // seri ödülü (kristal)
   packs: [
     { name: '3 Günlük Paket',            short: '3 günlük', cost: 500 },
     { name: '7 Günlük Paket (Haftalık)', short: '7 günlük', cost: 1000 }
@@ -94,9 +96,10 @@ async function state(env, id, extra) {
   const u = await env.DB.prepare('SELECT id,bal,earned,gift,spent,days,first,last,cam,pending FROM users WHERE id=?').bind(id).first();
   const reqs = (await env.DB.prepare('SELECT no,pack,cost,t,cam,status FROM reqs WHERE uid=? ORDER BY created DESC LIMIT 20').bind(id).all()).results || [];
   const codes = (await env.DB.prepare('SELECT code AS c, n, t FROM codes WHERE to_id=? AND used_at IS NOT NULL ORDER BY used_at DESC LIMIT 30').bind(id).all()).results || [];
+  const sk = await env.DB.prepare('SELECT n,best,shield,paid,last FROM streak WHERE uid=?').bind(id).first();
   return Object.assign({
-    ok: 1, s: Object.assign({}, u, { reqs: reqs.reverse(), codes }),
-    cfg: { daily: CFG.daily, packs: CFG.packs }, today: today()
+    ok: 1, s: Object.assign({}, u, { reqs: reqs.reverse(), codes, streak: sk || { n: 0, best: 0, shield: 0, paid: 0, last: '' } }),
+    cfg: { daily: CFG.daily, packs: CFG.packs, streak: { every: CFG.streakEvery, bonus: CFG.streakBonus } }, today: today()
   }, extra || {});
 }
 async function addLog(env, uid, kind, delta, ref) {
@@ -122,15 +125,58 @@ async function init(req, env) {
   return fail('Hesap oluşturulamadı, tekrar dene.', 500);
 }
 
-async function claimDaily(env, id) {
-  const t = today();
-  const r = await env.DB.prepare("UPDATE users SET bal=bal+?, earned=earned+?, days=days+1, last=?, first=CASE WHEN first='' THEN ? ELSE first END WHERE id=? AND last<?")
-    .bind(CFG.daily, CFG.daily, t, t, id, t).run();
-  if (r.meta.changes) { await addLog(env, id, 'daily', CFG.daily, t); return { rewarded: CFG.daily }; }
-  return { rewarded: 0 };
+/* ===== Giriş serisi: sunucu hesaplar (tarayıcıdaki sayı ödülü etkilemez) =====
+   Ardışık günde +1. Tek gün kaçırılırsa ve kalkan varsa seri korunur, yoksa 1'den başlar. Her 7. günde 1 kalkan (en fazla 1).
+   Her CFG.streakEvery. günde CFG.streakBonus kristal. core.js'teki seriNext ile aynı kurallar (testte birlikte denenir). */
+const dayNum = s => { const p = s.split('-').map(Number); return Date.UTC(p[0], p[1] - 1, p[2]) / 864e5; };
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+export function streakNext(old, t, every) {
+  every = every || 7;
+  if (!old || !DAY_RE.test(String(old.last))) return { st: { n: 1, best: 1, shield: 0, paid: 0, last: t }, ev: 'start', bonus: false };
+  const diff = Math.round(dayNum(t) - dayNum(old.last));
+  if (diff <= 0) return { st: old, ev: 'same', bonus: false };
+  const st = Object.assign({}, old); let ev;
+  if (diff === 1) { st.n++; ev = 'up'; }
+  else if (diff === 2 && st.shield) { st.n++; st.shield = 0; ev = 'saved'; }
+  else { st.n = 1; st.paid = 0; ev = old.n > 1 ? 'reset' : 'start'; }
+  st.last = t; if (st.n > st.best) st.best = st.n;
+  if (ev !== 'reset' && st.n % 7 === 0 && !st.shield) st.shield = 1;
+  const bonus = st.n % every === 0 && st.n > st.paid;
+  if (bonus) st.paid = st.n;
+  return { st, ev, bonus };
+}
+async function streakStep(env, id, t, days0, hint) {
+  const row = await env.DB.prepare('SELECT n,best,shield,paid,last FROM streak WHERE uid=?').bind(id).first();
+  let st, bonus = false;
+  if (!row && hint && typeof hint === 'object' && DAY_RE.test(String(hint.last)) && Math.abs(dayNum(String(hint.last)) - dayNum(t)) <= 1) {
+    // eski (yerel) seriyi bir kez devral: ama sunucudaki giriş günü sayısını aşamaz, devralınan günler için ödül verilmez
+    const cap = Math.max(1, days0 + 1), n = Math.max(1, Math.min(cap, Math.floor(+hint.n) || 1));
+    st = { n, best: Math.max(n, Math.min(cap, Math.floor(+hint.best) || 0)), shield: 0, paid: Math.floor(n / CFG.streakEvery) * CFG.streakEvery, last: t };
+  } else {
+    const r = streakNext(row, t, CFG.streakEvery); st = r.st; bonus = r.bonus;
+    if (r.ev === 'same') return 0;
+  }
+  const ops = [env.DB.prepare('INSERT INTO streak(uid,n,best,shield,paid,last) VALUES(?,?,?,?,?,?) ON CONFLICT(uid) DO UPDATE SET n=excluded.n,best=excluded.best,shield=excluded.shield,paid=excluded.paid,last=excluded.last')
+    .bind(id, st.n, st.best, st.shield, st.paid, st.last)];
+  if (bonus) ops.push(env.DB.prepare('UPDATE users SET bal=bal+?, earned=earned+? WHERE id=?').bind(CFG.streakBonus, CFG.streakBonus, id));
+  await env.DB.batch(ops);
+  if (bonus) await addLog(env, id, 'streak', CFG.streakBonus, String(st.n));
+  return bonus ? CFG.streakBonus : 0;
 }
 
-async function sync(req, env, u) { return json(await state(env, u.id, await claimDaily(env, u.id))); }
+async function claimDaily(env, id, hint) {
+  const t = today();
+  const u0 = await env.DB.prepare('SELECT days FROM users WHERE id=?').bind(id).first();
+  const r = await env.DB.prepare("UPDATE users SET bal=bal+?, earned=earned+?, days=days+1, last=?, first=CASE WHEN first='' THEN ? ELSE first END WHERE id=? AND last<?")
+    .bind(CFG.daily, CFG.daily, t, t, id, t).run();
+  if (!r.meta.changes) return { rewarded: 0 };
+  await addLog(env, id, 'daily', CFG.daily, t);
+  let streakBonus = 0;
+  try { streakBonus = await streakStep(env, id, t, u0 ? u0.days : 0, hint); } catch (e) { console.error('seri hatası', e && e.stack || e); }
+  return { rewarded: CFG.daily, streakBonus };
+}
+
+async function sync(req, env, u, b) { return json(await state(env, u.id, await claimDaily(env, u.id, b && b.hint))); }
 
 async function buy(req, env, u, b) {
   await rlBump(env, 'buy', u.id);
@@ -245,7 +291,7 @@ async function route(req, env) {
   const u = await auth(req, env);
   if (!u) return fail('Oturum geçersiz.', 401);
   switch (path) {
-    case '/api/sync': return sync(req, env, u);
+    case '/api/sync': return sync(req, env, u, b);
     case '/api/buy': return buy(req, env, u, b);
     case '/api/redeem': return redeem(req, env, u, b);
     case '/api/mail-done': return mailDone(req, env, u);
