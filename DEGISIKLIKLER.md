@@ -1,3 +1,19 @@
+# Bu sürümde değişenler (tasarım turu)
+
+## Alev daha büyüleyici
+- `js/seri.js` (`flame`) + `css/style.css`: renk geçişli gövde (alt koyu, uç açık), nefes alan aura, alevin ucu ve gövdesi kıvrılarak akar (`d` özelliği desteklenen tarayıcılarda), ince parlama çizgisi, yukarı uçan kıvılcımlar (kademe arttıkça çoğalır).
+- 5. kademeden (Turkuaz) itibaren yavaş dönen ışık huzmeleri; 7. kademeden (Mor) itibaren alevin etrafında dönen ışıltılar (9. kademeden sonra yıldız); Gökkuşağı'nda renk akışı ve parlayan taç sürüyor.
+- Karne'deki alev büyütüldü (92x112). Alevin altında **"Sıradaki: Mavi Alev · 5 gün sonra yanar"** önizlemesi var: baskısız, sadece merak uyandırır. Son kademede gizlenir.
+- Küçük alevlerde (Ayarlar düğmesi) ek efektler kapalı, sade kalır. Hareket azaltma açıksa tüm animasyonlar durur.
+
+## Kristal: çocuksu çizim korundu
+- `js/vitrin.js` içindeki yeni kristal çizimi, eski çocuksu (yüzlü, yanaklı) kristalle değiştirildi; Mağaza, bakiye çubuğu ve etiketlerde artık Ayarlar ikonlarıyla aynı kristal görünür.
+
+## Mağaza Karne'den kalktı
+- Karne sekmesindeki "Alev koleksiyonu" düğmesi kaldırıldı; Karne'de yalnızca "Paylaşım kartı" kaldı. Mağaza artık sadece **Ayarlar'ın en altında** (küçük bir kart olarak), seri sayısı ve alevle birlikte.
+
+---
+
 # Bu sürümde değişenler
 
 ## Karne artık kendi sekmesinde

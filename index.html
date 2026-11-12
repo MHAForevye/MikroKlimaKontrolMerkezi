@@ -30,7 +30,7 @@
   <meta name="apple-mobile-web-app-title" content="Mikro-Klima">
   <script src="js/theme.js?v=3ec7b09e"></script>
   
-  <link rel="stylesheet" href="css/fonts.css?v=f1b34a86"><link rel="stylesheet" href="css/style.css?v=8fa88d34"><link rel="stylesheet" href="css/classic.css?v=961cd952"><link rel="stylesheet" href="css/sade.css?v=fd3c81c7"><link rel="stylesheet" href="css/vitrin.css?v=77c44215">
+  <link rel="stylesheet" href="css/fonts.css?v=f1b34a86"><link rel="stylesheet" href="css/style.css?v=55f9da08"><link rel="stylesheet" href="css/classic.css?v=961cd952"><link rel="stylesheet" href="css/sade.css?v=fd3c81c7"><link rel="stylesheet" href="css/vitrin.css?v=77c44215">
   <script src="lib/chart.umd.min.js"></script>
 <script data-goatcounter="https://havadurumu.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
 </head>
@@ -193,8 +193,8 @@
         <div class="seri-prog"><div class="seri-prog-bar" role="progressbar" aria-label="Sonraki seri ödülüne ilerleme"><i id="seriProgBar"></i></div><div class="seri-prog-tx" id="seriProgTx"></div></div>
         <div class="seri-week" id="seriWeek"></div>
         <div class="seri-stats" id="seriStats"></div>
+        <div class="seri-next" id="seriNext" hidden></div>
         <div class="seri-btns">
-          <button type="button" class="setting-btn" data-act="openStore"><span class="ico" data-ico="gem" style="--s:22px"></span>Alev koleksiyonu</button>
           <button type="button" class="setting-btn" data-act="kartOpen"><span class="ico" data-ico="share" style="--s:22px"></span>Paylaşım kartı</button>
         </div>
       </div>
@@ -296,11 +296,6 @@
     </div>
 
       <div class="card wide">
-        <h2 class="card-title">Mağaza</h2>
-        <button id="btnStore" class="setting-btn"><span class="ico" data-ico="gem" style="--s:22px"></span>Mağazayı aç<span class="state seri-st" id="seriSt" hidden></span></button>
-      </div>
-
-      <div class="card wide">
         <h2 class="card-title">Hakkında</h2>
         <button id="btnStudio" class="setting-btn"><span class="ico" data-ico="face" style="--s:22px"></span>Forevye · Stüdyo ve diğer uygulamalar</button>
       </div>
@@ -309,6 +304,11 @@
         <h2 class="card-title">Veri durumu</h2>
         <div class="src-stats" id="metaBox" style="margin:0 0 12px">Henüz veri alınmadı.</div>
         <button id="btnRefresh2" class="setting-btn"><span class="ico" data-ico="refresh" style="--s:22px"></span>Şimdi yenile</button>
+      </div>
+
+      <div class="card wide">
+        <h2 class="card-title">Mağaza</h2>
+        <button id="btnStore" class="setting-btn"><span class="ico" data-ico="gem" style="--s:22px"></span>Mağazayı aç<span class="state seri-st" id="seriSt" hidden></span></button>
       </div>
     </section>
   </main>
@@ -453,10 +453,10 @@
 </div>
 
 <script src="js/core.js?v=087c7f10"></script>
-<script src="js/vitrin.js?v=ac001aa7"></script>
+<script src="js/vitrin.js?v=6e5620ce"></script>
 <script src="js/app.js?v=87f74b04"></script>
 <script src="js/kristal.js?v=bcc0516e"></script>
-<script src="js/seri.js?v=e7e5617b"></script>
+<script src="js/seri.js?v=13fbde40"></script>
 <script src="js/kart.js?v=6da26b8f"></script>
 </body>
 </html>

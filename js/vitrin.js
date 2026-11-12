@@ -8,9 +8,13 @@
   var NS = 'http://www.w3.org/2000/svg';
 
   var art = {
-    gem: function () {
-      return '<svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><path d="M13 7h22l9 12-20 24L4 19z" fill="#2fa8f0"/><path d="M13 7h22l9 12H4z" fill="#a8e8ff"/><path d="M4 19h20L24 43z" fill="#1c86e8"/><path d="M44 19H24l0 24z" fill="#1565c8"/>' +
-        '<path d="M24 19L13 7M24 19L35 7M24 19v24" stroke="#fff" stroke-opacity=".6" stroke-width="1.5" fill="none"/><path d="M9.5 15.5l3-5" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><path d="M42 3v6M39 6h6" stroke="#fff3a0" stroke-width="2.4" stroke-linecap="round"/></svg>';
+    gem: function () {   // çocuksu kristal: kalın çerçeve, yanaklar, gözler, gülümseme (Ayarlar ikonlarındaki ile aynı çizgi)
+      return '<svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><g stroke="#1e3a5f" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"><path d="M14 6h20l10 12-20 26L4 18z" fill="#7dd3fc"/><path d="M14 6h20l10 12H4z" fill="#e0f2fe"/><path d="M19 6l-3 12M29 6l3 12" fill="none" stroke-width="2.2"/></g>' +
+        '<path d="M10 14l2-3" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>' +
+        '<circle cx="15" cy="28" r="2.4" fill="#f9a8d4"/><circle cx="33" cy="28" r="2.4" fill="#f9a8d4"/>' +
+        '<circle cx="19.5" cy="25" r="1.9" fill="#4a3426"/><circle cx="28.5" cy="25" r="1.9" fill="#4a3426"/>' +
+        '<path d="M21 30q3 3.2 6 0" fill="none" stroke="#4a3426" stroke-width="2.2" stroke-linecap="round"/>' +
+        '<path d="M43 2.5v7M39.5 6h7" fill="none" stroke="#fde047" stroke-width="3" stroke-linecap="round"/></svg>';
     },
     check: function () {
       return '<svg viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M6 17l7 7L26 8" fill="none" stroke="#1a5a1f" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 17l7 7L26 8" fill="none" stroke="#b6ffb0" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';

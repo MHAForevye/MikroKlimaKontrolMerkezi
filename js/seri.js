@@ -17,16 +17,42 @@
   var P_L = 'M8.5 30C3.5 27 3.5 20 8 14C8.6 18 11 20 11.5 24C10.5 25 9 27 8.5 30Z';
   var P_R = 'M23.5 30C28.5 27 28.5 20 24 14C23.4 18 21 20 20.5 24C21.5 25 23 27 23.5 30Z';
   var P_STAR = 'M0-3.4L.9-.9 3.4 0 .9.9 0 3.4-.9.9-3.4 0-.9-.9Z';
+  /* Kıvılcımlar: [cx, cy, r, yana kayma, süre, gecikme]. Kademe arttıkça daha çok kıvılcım uçar. */
+  var EMB = [[11, 30, 1.2, -4, 2.6, 0], [21, 28, 1, 5, 3.1, -1.1], [16, 24, 1.1, 1, 2.2, -.5], [8, 24, .9, -6, 3.4, -2], [24, 24, .9, 6, 2.8, -1.7],
+             [14, 20, .8, -3, 2.4, -1.4], [19, 18, .8, 3, 3, -.3], [10, 18, .7, -5, 3.6, -2.6], [22, 16, .7, 5, 2.5, -.9], [16, 14, .7, 0, 3.2, -2.2]];
+  var uid = 0;
   function flame(tier, cls) {
     tier = Math.max(0, Math.min(11, tier | 0));
-    var side = tier >= 2 ? (tier >= 4 ? 2 : 1) : 0;                          // yan dil sayısı
+    var id = 'flg' + (++uid), side = tier >= 2 ? (tier >= 4 ? 2 : 1) : 0;    // yan dil sayısı
     var h = '<svg class="flame fl-t' + tier + (cls ? ' ' + cls : '') + '" viewBox="-4 -8 40 50" aria-hidden="true" focusable="false">';
+    /* Renk geçişleri: alt koyu, uç açık. Renkler CSS değişkenlerinden (.fl-tN) gelir. */
+    h += '<defs>' +
+      '<linearGradient id="' + id + 'o" x1="0" y1="1" x2="0" y2="0"><stop offset="0" style="stop-color:var(--fo)"/><stop offset=".7" style="stop-color:var(--fo)"/><stop offset="1" style="stop-color:var(--fm)"/></linearGradient>' +
+      '<linearGradient id="' + id + 'm" x1="0" y1="1" x2="0" y2="0"><stop offset="0" style="stop-color:var(--fm)"/><stop offset="1" style="stop-color:var(--fc)"/></linearGradient>' +
+      '<radialGradient id="' + id + 'c" cx=".5" cy=".7" r=".6"><stop offset="0" stop-color="#fff"/><stop offset="1" style="stop-color:var(--fc)"/></radialGradient>' +
+      '<radialGradient id="' + id + 'a"><stop offset="0" style="stop-color:var(--fm);stop-opacity:.6"/><stop offset=".6" style="stop-color:var(--fo);stop-opacity:.18"/><stop offset="1" style="stop-color:var(--fo);stop-opacity:0"/></radialGradient></defs>';
+    h += '<circle class="fl-aura" cx="16" cy="24" r="23" fill="url(#' + id + 'a)"/>';
+    if (tier >= 5) {                                                          // yavaş dönen ışık huzmeleri
+      h += '<g class="fl-rays">';
+      for (var r = 0; r < 8; r++) h += '<path transform="rotate(' + r * 45 + ' 16 24)" d="M16 24L14.4 -2H17.6Z"/>';
+      h += '</g>';
+    }
     if (tier >= 8) h += '<circle class="fl-halo" cx="16" cy="23" r="19"/>';
     if (side) h += '<path class="fl-s fl-sl" d="' + P_L + '"/>' + (side > 1 ? '<path class="fl-s fl-sr" d="' + P_R + '"/>' : '');
-    h += '<path class="fl-o" d="' + P_O + '"/><path class="fl-m" d="' + P_M + '"/><path class="fl-c" d="' + P_C + '"/>';
-    h += '<circle class="sp sp1" cx="10" cy="14" r="1.3"/><circle class="sp sp2" cx="23" cy="18" r="1.1"/>';
-    if (tier >= 3) h += '<circle class="sp sp3" cx="16" cy="8" r="1.2"/>';
-    if (tier >= 7) h += '<circle class="sp sp4" cx="6" cy="22" r="1"/><circle class="sp sp5" cx="27" cy="24" r="1"/>';
+    h += '<path class="fl-o" fill="url(#' + id + 'o)" d="' + P_O + '"/><path class="fl-m" fill="url(#' + id + 'm)" d="' + P_M + '"/><path class="fl-c" fill="url(#' + id + 'c)" d="' + P_C + '"/>';
+    h += '<path class="fl-hl" d="M12.6 31C11 27.5 11.4 23.5 13.6 20"/>';      // ince parlama çizgisi
+    for (var e = 0, n = Math.min(EMB.length, 4 + Math.floor(tier * .55)); e < n; e++) {
+      var m = EMB[e];
+      h += '<circle class="emb ' + (e % 2 ? 'e2' : 'e1') + '" cx="' + m[0] + '" cy="' + m[1] + '" r="' + m[2] + '" style="--dx:' + m[3] + 'px;--du:' + m[4] + 's;--dl:' + m[5] + 's"/>';
+    }
+    if (tier >= 7) {                                                          // alevin etrafında dönen ışıltılar
+      h += '<g class="fl-orb">';
+      for (var o = 0; o < 4; o++) {
+        var ang = o * Math.PI / 2, ox = (16 + Math.cos(ang) * 18).toFixed(1), oy = (22 + Math.sin(ang) * 18).toFixed(1);
+        h += tier >= 9 ? '<path class="fl-star" transform="translate(' + ox + ' ' + oy + ')" d="' + P_STAR + '"/>' : '<circle class="fl-dot" cx="' + ox + '" cy="' + oy + '" r="1.2"/>';
+      }
+      h += '</g>';
+    }
     if (tier >= 9) h += '<path class="fl-star st1" transform="translate(4 6)" d="' + P_STAR + '"/><path class="fl-star st2" transform="translate(28 9)" d="' + P_STAR + '"/>';
     if (tier >= 11) h += '<path class="fl-crown" d="M8.5 5L11 8.4 16 0.5 21 8.4 23.5 5 22.4 12H9.6Z"/>';
     return h + '</svg>';
@@ -70,6 +96,13 @@
     $('seriNum').textContent = i.n;
     $('seriName').textContent = SERI_TIERS[tier].name + (tier < 11 ? ' · sonraki alev ' + seriTierDay(seriTier(i.n) + 1) + '. günde' : '');
     $('seriMsg').textContent = MSG[i.ev] || MSG.up;
+    var nx = $('seriNext');   // sıradaki alevin önizlemesi: baskısız, sadece merak uyandırır
+    if (nx) {
+      if (seriTier(i.n) < 11) {
+        var nt = seriTier(i.n) + 1, left = Math.max(1, seriTierDay(nt) - i.n);
+        nx.hidden = false; nx.innerHTML = '<span class="seri-next-art">' + flame(nt) + '</span><span><b>Sıradaki: ' + SERI_TIERS[nt].name + '</b><small>' + left + ' gün sonra yanar</small></span>';
+      } else nx.hidden = true;
+    }
     var into = i.n % i.every === 0 ? i.every : i.n % i.every, nxt = i.n % i.every === 0 ? i.n : seriNextMilestone(i.n);
     $('seriProgBar').style.width = Math.round(into / i.every * 100) + '%';
     $('seriProgTx').textContent = i.n % i.every === 0 && i.n >= i.every ? i.n + '. gün: ' + i.bonus + ' kristal ödülü alındı' : into + '/' + i.every + ' · ' + nxt + '. günde +' + i.bonus + ' kristal';
