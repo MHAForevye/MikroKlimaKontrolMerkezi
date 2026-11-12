@@ -1,5 +1,41 @@
 # Bu sürümde değişenler
 
+## Karne artık kendi sekmesinde
+- Alt çubukta 5 sekme: Tahmin, Detay, **Karne**, Kaynaklar, Ayarlar. "Geçmiş doğruluk" tablosu, "Kendi karnem" ve seri ateşi Karne sekmesinde; Kaynaklar'da yalnızca kaynak listesi kaldı. Sade görünümde Kaynaklar gizli olsa da Karne görünür. Ayarlar > Açılış sekmesi'ne "Karne" eklendi.
+
+## Seri ateşi: 12 alev, 7 günde bir 60 kristal
+- Alev 7, 14, 21... günde rengini ve şeklini değiştirir (Kıvılcım, Mum Alevi, Kamp Ateşi, Meşale, Mavi, Turkuaz, Zümrüt, Mor, Gül, Altın, Buz, Gökkuşağı; yan diller, hale, yıldız ve taç eklenir). Kademeler `js/core.js` (`SERI_TIERS`, `seriTier`), çizim `js/seri.js`, renkler `css/style.css` (`.fl-t0` ... `.fl-t11`).
+- **Seriyi sunucu hesaplar** (`worker/index.js`, `streakNext`): ardışık günde +1, tek gün kaçırılırsa kalkan varsa korunur, yoksa 1'den başlar. Her **7. günde +60 kristal** (`CFG.streakEvery`, `CFG.streakBonus`). Tarayıcıdaki sayı ödülü etkilemez, hile yapılamaz. Yerel seri bir kez devralınır ama sunucudaki giriş günü sayısını aşamaz.
+- **Dağıtım için zorunlu:** yeni `streak` tablosu var. `npx wrangler d1 execute <veritabanı> --remote --file=schema.sql` (tekrar çalıştırmak güvenli).
+- Mağaza'da "Alev koleksiyonu" rafı: 12 alevden hangileri açık, kilitlilerin ne zaman açılacağı; açık olanlardan istediğini seçebilirsin ("Otomatik" en yükseği gösterir).
+
+## Mağaza ve görünüm seçici yeniden tasarlandı ("Vitrin")
+- `css/vitrin.css` + `js/vitrin.js`: dokulu altın çerçeveli, parıltılı, animasyonlu kartlar; iki renkli sahne başlığı, bakiye çubuğu ve "sonraki günlük ödüle kalan süre". Karta basınca **ayrıntı penceresi** açılır: büyük resim, ad, açıklama, bilgi etiketleri, **Al / Uygula** ve **Kapat**.
+- Mağaza: Ücretsiz ödüller (günlük giriş, seri ödülü, hediye kodu), Aktivasyon paketleri, Alev koleksiyonu, Hesabım.
+- Ayarlar > Görünüm: Renk modu için **Açık / Koyu / Sistem** önizleme kartları (Sistem artık cihazı canlı izler) ve Tema için Sade / Klasik / Çizgi film önizleme kartları.
+- Hareket azaltma ayarı açıksa animasyonlar kapanır.
+
+## Paylaşım kartı
+- Karne sekmesi > Paylaşım kartı: Hava, Karne ve Seri olmak üzere 3 tür, 1080x1350 resim. Tarayıcıda çizilir, sunucuya gitmez. Paylaş (Web Share) ya da indir. `js/kart.js`.
+
+## Şehir sayfaları
+- 81 il için `sehir/<ad>.html` + `sehir/index.html`, `sitemap.xml` güncellendi. `node build-cities.mjs` (veya `npm run cities`) üretir, `npm run deploy` otomatik çalıştırır. Sayfadaki "tahmini aç" bağlantısı `/?yer=enlem,boylam,Ad` ile konumu kayıtlı konumlara ekler ve açar. Canlı sıcaklık `js/sehir.js`.
+
+## Ana ekrana ekle önerisi, iskelet ekran, sekme olayları
+- Ayarlar'a **ikinci kez** girildiğinde bir kez, kapatılabilir bir "Ana ekrana ekleyelim mi?" kartı çıkar (kuruluysa hiç çıkmaz).
+- İlk veri gelene kadar sıcaklık, saatlik şerit ve 7 günlük görünüm için iskelet (shimmer) ekran.
+- GoatCounter olayları: `sekme/<ad>` (hangi sekme açıldı), `sure/<ad>/<kova>` (sekmede geçen süre kovası), `a2hs/...`, `kart-ac/...`, `gorunum/...`. Kişisel veri yok. Gizlilik sayfası güncellendi.
+
+## Karne verisi sunucuda tutulmuyor
+- Karne verisi (model tahminleri ve gerçekleşenler) cihazda kalır; yalnızca yukarıdaki anonim olay sayıları GoatCounter'a gider. İleride toplu karne istenirse ayrı bir izinle düşünülmeli.
+
+## Düzeltme
+- `.assetsignore` zip'te yoktu (test başarısızdı); yeniden eklendi. Worker kodu ve testler artık siteyle birlikte yayınlanmıyor.
+
+---
+
+# Önceki sürümde değişenler
+
 ## Seri ateşi (Mağaza'da)
 - Mağaza sayfasının üstünde hafif animasyonlu mavi alev, kaç gün üst üste açıldığı ve son 7 günün işaretleri. Ayarlar > Mağaza düğmesinde de küçük alev + gün sayısı görünür.
 - Baskı yok: üst çubukta alev, açılır pencere, uyarı ya da "seri bozuldu" dili kalmadı. Sadece olumlu mesajlar ("Bugün de buradasın", "Tekrar hoş geldin"). Tek gün kaçırılırsa seri sessizce korunur (her 7. günde bir kalkan, ekranda yazmaz).

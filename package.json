@@ -3,8 +3,9 @@
   "private": true,
   "scripts": {
     "bump": "node bump-version.mjs",
+    "cities": "node build-cities.mjs",
     "test": "node --test tests/*.test.mjs",
     "check": "node bump-version.mjs --check && node --test tests/*.test.mjs",
-    "deploy": "node bump-version.mjs && node --test tests/*.test.mjs && npx wrangler deploy"
+    "deploy": "node build-cities.mjs && node bump-version.mjs && node --test tests/*.test.mjs && npx wrangler deploy"
   }
 }

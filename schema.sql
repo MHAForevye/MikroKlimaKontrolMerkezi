@@ -36,7 +36,7 @@ CREATE INDEX IF NOT EXISTS codes_to ON codes(to_id);
 CREATE TABLE IF NOT EXISTS log (
   id    INTEGER PRIMARY KEY AUTOINCREMENT,
   uid   TEXT NOT NULL,
-  kind  TEXT NOT NULL,                    -- daily | buy | redeem | admin_add
+  kind  TEXT NOT NULL,                    -- daily | streak | buy | redeem | admin_add
   delta INTEGER NOT NULL,
   ref   TEXT NOT NULL DEFAULT '',
   t     TEXT NOT NULL
@@ -48,4 +48,13 @@ CREATE TABLE IF NOT EXISTS ipc (
   d TEXT NOT NULL,
   c INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (h, d)
+);
+-- Giriş serisi (sunucu hesaplar; 7 günde bir seri ödülü buradan verilir). Tekrar çalıştırmak güvenlidir.
+CREATE TABLE IF NOT EXISTS streak (
+  uid    TEXT PRIMARY KEY,
+  n      INTEGER NOT NULL DEFAULT 0,      -- güncel seri (gün)
+  best   INTEGER NOT NULL DEFAULT 0,
+  shield INTEGER NOT NULL DEFAULT 0,      -- 0/1: tek günü kaçırmaya karşı sessiz kalkan
+  paid   INTEGER NOT NULL DEFAULT 0,      -- bu seride seri ödülü verilen en son gün sayısı
+  last   TEXT NOT NULL DEFAULT ''         -- son sayılan gün (Türkiye saati)
 );

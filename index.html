@@ -28,13 +28,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Mikro-Klima">
-  <script src="js/theme.js?v=368b16f2"></script>
+  <script src="js/theme.js?v=3ec7b09e"></script>
   
-  <link rel="stylesheet" href="css/fonts.css?v=f1b34a86"><link rel="stylesheet" href="css/style.css?v=1db274c7"><link rel="stylesheet" href="css/classic.css?v=961cd952"><link rel="stylesheet" href="css/sade.css?v=fd3c81c7">
+  <link rel="stylesheet" href="css/fonts.css?v=f1b34a86"><link rel="stylesheet" href="css/style.css?v=8fa88d34"><link rel="stylesheet" href="css/classic.css?v=961cd952"><link rel="stylesheet" href="css/sade.css?v=fd3c81c7"><link rel="stylesheet" href="css/vitrin.css?v=77c44215">
   <script src="lib/chart.umd.min.js"></script>
 <script data-goatcounter="https://havadurumu.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
 </head>
-<body>
+<body class="first-load">
 <a class="skip-link" href="#main">İçeriğe geç</a>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><filter id="wob" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="3" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.6"/></filter><filter id="paint" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" seed="5" result="w"/><feDisplacementMap in="SourceGraphic" in2="w" scale="3.4" result="d"/><feTurbulence type="fractalNoise" baseFrequency="0.4" numOctaves="1" seed="2" result="g"/><feColorMatrix in="g" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1 1.45" result="ga"/><feComposite in="d" in2="ga" operator="in"/></filter></defs></svg>
 
@@ -182,17 +182,21 @@
       </div>
     </section>
 
-    <!-- SEKME 3: KAYNAKLAR -->
-    <section class="panel" id="panel-sources" role="tabpanel" aria-labelledby="tab-sources">
-      <div class="card" id="srcCard">
-        <div class="src-head">
-          <span class="ico" data-ico="eye" style="--s:22px"></span><b>Kaynak karşılaştırması</b>
-          <span id="srcSummary">yükleniyor…</span>
-          <button class="info-btn" data-info="sources" aria-label="Bilgi"><span class="ico" data-ico="info" style="--s:24px"></span></button>
+    <!-- SEKME 3: KARNE -->
+    <section class="panel" id="panel-karne" role="tabpanel" aria-labelledby="tab-karne">
+      <div class="card wide seri-card" id="seriCard">
+        <div class="src-head"><span class="ico" data-ico="sun" style="--s:22px"></span><b>Seri ateşin</b></div>
+        <div class="seri-row">
+          <div class="seri-big" id="seriBig"></div>
+          <div><div class="seri-num"><span id="seriNum">1</span> <small>gün üst üste</small></div><div class="seri-name" id="seriName"></div><p class="seri-msg" id="seriMsg"></p></div>
         </div>
-        <div id="srcBadges" class="src-badges"></div>
-        <div class="src-scroll"><table id="srcTable" class="src-table"></table></div>
-        <div id="srcStats" class="src-stats"></div>
+        <div class="seri-prog"><div class="seri-prog-bar" role="progressbar" aria-label="Sonraki seri ödülüne ilerleme"><i id="seriProgBar"></i></div><div class="seri-prog-tx" id="seriProgTx"></div></div>
+        <div class="seri-week" id="seriWeek"></div>
+        <div class="seri-stats" id="seriStats"></div>
+        <div class="seri-btns">
+          <button type="button" class="setting-btn" data-act="openStore"><span class="ico" data-ico="gem" style="--s:22px"></span>Alev koleksiyonu</button>
+          <button type="button" class="setting-btn" data-act="kartOpen"><span class="ico" data-ico="share" style="--s:22px"></span>Paylaşım kartı</button>
+        </div>
       </div>
 
       <div class="card" id="karneCard">
@@ -215,8 +219,29 @@
       </div>
     </section>
 
-    <!-- SEKME 4: AYARLAR -->
+    <!-- SEKME 4: KAYNAKLAR -->
+    <section class="panel" id="panel-sources" role="tabpanel" aria-labelledby="tab-sources">
+      <div class="card" id="srcCard">
+        <div class="src-head">
+          <span class="ico" data-ico="eye" style="--s:22px"></span><b>Kaynak karşılaştırması</b>
+          <span id="srcSummary">yükleniyor…</span>
+          <button class="info-btn" data-info="sources" aria-label="Bilgi"><span class="ico" data-ico="info" style="--s:24px"></span></button>
+        </div>
+        <div id="srcBadges" class="src-badges"></div>
+        <div class="src-scroll"><table id="srcTable" class="src-table"></table></div>
+        <div id="srcStats" class="src-stats"></div>
+      </div>
+
+
+    </section>
+
+    <!-- SEKME 5: AYARLAR -->
     <section class="panel" id="panel-settings" role="tabpanel" aria-labelledby="tab-settings">
+      <div class="a2hs wide" id="a2hs" hidden>
+        <img src="icon.png" alt="" width="44" height="44">
+        <div><b>Ana ekrana ekleyelim mi?</b><p id="a2hsTx"></p>
+          <div class="a2hs-btns"><button type="button" class="go" id="a2hsGo">Nasıl eklenir?</button><button type="button" id="a2hsNo">Şimdilik değil</button></div></div>
+      </div>
       <div class="card">
         <h2 class="card-title">Konum</h2>
         <div class="add-location-box" id="addLocBox">
@@ -234,12 +259,18 @@
         </div>
       </div>
 
+
+      <div class="wide vt vt-inline" id="themePicker">
+        <div class="vt-head">Görünüm</div>
+        <p class="vt-sub">Bir karta dokun, açıklamayı oku, sonra uygula.</p>
+        <section class="vt-shelf"><h3 class="vt-tit">Renk modu</h3><div class="vt-grid" id="modeShelf"></div></section>
+        <section class="vt-shelf"><h3 class="vt-tit">Tema</h3><div class="vt-grid" id="skinShelf"></div></section>
+      </div>
+
       <div class="card">
-        <h2 class="card-title">Görünüm ve bildirim</h2>
+        <h2 class="card-title">Bildirim</h2>
         <p class="hint">Bildirimler uygulama ya da sayfa açıkken (arka planda olabilir) çalışır; tamamen kapalıyken gelmez.</p>
         <div class="stack">
-          <button id="btnTheme" class="setting-btn"><span class="ico" id="themeIco" data-ico="moon" style="--s:22px"></span>Gece / gündüz teması</button>
-          <div class="skin-pick" role="group" aria-label="Görünüm"><button type="button" class="setting-btn" data-act="setSkin" data-arg="sade" aria-pressed="false">Sade (önerilen)</button><button type="button" class="setting-btn" data-act="setSkin" data-arg="classic" aria-pressed="false">Klasik</button><button type="button" class="setting-btn" data-act="setSkin" data-arg="pastel" aria-pressed="false">Çizgi film</button></div>
           <button id="btnNotif" class="setting-btn" aria-pressed="false"><span class="ico" data-ico="bell" style="--s:22px"></span>Bildirimler<span class="state" id="notifState">Kapalı</span></button>
         </div>
       </div>
@@ -248,7 +279,7 @@
       <div class="pref-row"><label for="prefFont">Yazı boyutu</label>
         <select id="prefFont"><option value="15">Küçük</option><option value="17">Normal</option><option value="19">Büyük</option><option value="21">Çok büyük</option></select></div>
       <div class="pref-row"><label for="prefTab">Açılış sekmesi</label>
-        <select id="prefTab"><option value="last">Son baktığım</option><option value="today">Tahmin</option><option value="detail">Detay</option><option value="sources">Kaynaklar</option></select></div>
+        <select id="prefTab"><option value="last">Son baktığım</option><option value="today">Tahmin</option><option value="detail">Detay</option><option value="karne">Karne</option><option value="sources">Kaynaklar</option></select></div>
       <div class="pref-row"><label for="prefRef">Otomatik yenileme</label>
         <select id="prefRef"><option value="5">5 dk</option><option value="10">10 dk</option><option value="30">30 dk</option><option value="60">60 dk</option></select></div>
       <div class="pref-row"><label for="prefHot">Sıcak uyarısı<small>bu sıcaklıkta ve üstünde</small></label>
@@ -281,7 +312,7 @@
       </div>
     </section>
   </main>
-  <div class="credit-line"><button type="button" id="btnCredit">Forevye tarafından geliştirildi</button><a href="gizlilik.html">Gizlilik politikası</a></div>
+  <div class="credit-line"><button type="button" id="btnCredit">Forevye tarafından geliştirildi</button><a href="gizlilik.html">Gizlilik politikası</a><a href="sehir/">Şehirler</a></div>
   <p class="credit-line" style="font-size:11px;opacity:.65;margin-top:4px">Veriler: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (CC BY 4.0), <a href="https://www.met.no/" target="_blank" rel="noopener">MET Norway</a> (CC BY 4.0), <a href="https://aviationweather.gov/" target="_blank" rel="noopener">NOAA Aviation Weather</a> (METAR), <a href="https://www.rainviewer.com/" target="_blank" rel="noopener">RainViewer</a>, <a href="https://wttr.in/" target="_blank" rel="noopener">wttr.in</a></p>
 </div>
 
@@ -289,6 +320,7 @@
   <div class="tabbar-inner" role="tablist">
     <button type="button" class="tab active" id="tab-today" role="tab" aria-selected="true" aria-controls="panel-today" data-act="showTab" data-arg="today"><span class="ico" data-ico="partly"></span>Tahmin</button>
     <button type="button" class="tab" id="tab-detail" role="tab" aria-selected="false" aria-controls="panel-detail" data-act="showTab" data-arg="detail"><span class="ico" data-ico="thermo"></span>Detay</button>
+    <button type="button" class="tab" id="tab-karne" role="tab" aria-selected="false" aria-controls="panel-karne" data-act="showTab" data-arg="karne"><span class="ico" data-ico="gauge"></span>Karne</button>
     <button type="button" class="tab" id="tab-sources" role="tab" aria-selected="false" aria-controls="panel-sources" data-act="showTab" data-arg="sources"><span class="ico" data-ico="eye"></span>Kaynaklar</button>
     <button type="button" class="tab" id="tab-settings" role="tab" aria-selected="false" aria-controls="panel-settings" data-act="showTab" data-arg="settings"><span class="ico" data-ico="pin"></span>Ayarlar</button>
   </div>
@@ -336,44 +368,24 @@
   </div>
 </div>
 
-<div class="studio-page" id="storePage" role="dialog" aria-modal="true" aria-label="Mağaza">
-  <div class="studio-inner">
-    <button type="button" class="studio-back" id="storeBack"><span class="ico" data-ico="arrow" style="--s:22px;transform:rotate(90deg)"></span>Geri</button>
-
-    <div class="studio-hero">
-      <span class="ico" data-ico="gem"></span>
-      <h2 class="sh-title">Mağaza</h2>
-      <p class="studio-sub">Siteyi her gün açtığında <b>30 kristal</b> kazanırsın. Kristallerle Astrophoto Cam için aktivasyon kodu alabilirsin.</p>
+<div class="vt vt-page" id="storePage" role="dialog" aria-modal="true" aria-label="Mağaza">
+  <button type="button" class="vt-back" id="storeBack"><span aria-hidden="true">‹</span> Geri</button>
+  <div class="vt-wrap">
+    <div class="vt-hero">
+      <div class="vt-hero-gems" aria-hidden="true"><span data-vt="gem"></span><span data-vt="gem"></span><span data-vt="gem"></span><span data-vt="gem"></span><span data-vt="gem"></span></div>
+      <div class="vt-ribbon"><i></i><b>Kristal Mağazası</b></div>
+    </div>
+    <div class="vt-bar">
+      <div class="vt-timer"><span data-vt="clock"></span><span id="vtTimer">Sonraki günlük ödül</span></div>
+      <div class="vt-bal" aria-label="Kristal bakiyen"><span data-vt="gem"></span><b id="kBal">0</b></div>
     </div>
 
-    <h3 class="studio-sec">Seri ateşin</h3>
-    <div class="card studio-card seri-card" id="seriCard">
-      <div class="seri-row">
-        <div class="seri-big" id="seriBig"></div>
-        <div><div class="seri-num"><span id="seriNum">1</span> <small>gün üst üste</small></div><p class="seri-msg" id="seriMsg"></p></div>
-      </div>
-      <div class="seri-week" id="seriWeek"></div>
-      <div class="seri-stats" id="seriStats"></div>
-    </div>
+    <section class="vt-shelf"><h3 class="vt-tit">Ücretsiz ödüller</h3><div class="vt-grid" id="freeShelf"></div></section>
 
-    <h3 class="studio-sec">Hesabım</h3>
-    <div class="card studio-card">
-      <div class="k-stat">
-        <div><div class="param-label">Kristal bakiyen</div><div class="k-big"><span id="kBal">0</span><span class="ico k-gem" data-ico="gem" style="--s:34px"></span></div></div>
-        <div style="text-align:right"><div class="param-label">Site ID'n</div><div class="k-big k-id" id="kId">--------</div><button type="button" id="kCopyId" class="k-mini">Kopyala</button></div>
-      </div>
-      <div class="src-stats" id="kToday"></div>
-      <div class="stack" style="margin-top:10px" id="kOldWrap" hidden><button type="button" id="kRestoreOld" class="setting-btn">Önceki hesabımı geri yükle</button><small class="src-stats" style="margin:6px 0 0">Sunucu eski hesabını bulamadığı için yeni hesap açıldı. Eski hesabın bu cihazda duruyor; geri yüklersen bakiyen geri gelir.</small></div>
-      <div class="pref-row" style="margin-top:10px"><label for="kCode">Hediye kodu<small>arkadaşından geldiyse</small></label>
-        <input type="text" id="kCode" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXXX"></div>
-      <div class="stack" style="margin-top:10px"><button type="button" id="kCodeUse" class="setting-btn">Kodu kullan</button></div>
-    </div>
-
-    <h3 class="studio-sec">Aktivasyon paketleri</h3>
-    <div class="card studio-card">
+    <section class="vt-shelf"><h3 class="vt-tit">Aktivasyon paketleri</h3><div class="vt-grid two" id="kPacks"></div></section>
+    <div class="vt-panel">
       <div class="pref-row"><label for="kCamId">Astrophoto Cam ID'n<small>mail taslağına yazılır</small></label>
         <input type="text" id="kCamId" maxlength="60" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ID"></div>
-      <div class="stack" id="kPacks" style="margin-top:10px"></div>
       <p class="hint" id="kLow" style="margin:10px 0 0" hidden>Yetersiz kristal! Günlük giriş yaparak kristal biriktirmeye devam et.</p>
       <div class="k-pending" id="kPending" hidden>
         <p class="hint" id="kPendingTx" style="margin:0 0 8px"></p>
@@ -386,14 +398,26 @@
       </div>
     </div>
 
-    <div id="kHistWrap" style="display:none">
-      <h3 class="studio-sec">Son talepler</h3>
-      <div class="card studio-card"><div class="src-stats" id="kHist" style="margin:0"></div></div>
+    <section class="vt-shelf" style="margin-top:14px"><h3 class="vt-tit">Alev koleksiyonu</h3><div class="vt-grid" id="flameShelf"></div></section>
+
+    <div class="vt-panel">
+      <h3>Hesabım</h3>
+      <div class="k-stat">
+        <div><div class="param-label">Kristal bakiyen</div><div class="k-big"><span id="kBal2"></span></div></div>
+        <div style="text-align:right"><div class="param-label">Site ID'n</div><div class="k-big k-id" id="kId">--------</div><button type="button" id="kCopyId" class="k-mini">Kopyala</button></div>
+      </div>
+      <div class="src-stats" id="kToday"></div>
+      <div class="stack" style="margin-top:10px" id="kOldWrap" hidden><button type="button" id="kRestoreOld" class="setting-btn">Önceki hesabımı geri yükle</button><small class="src-stats" style="margin:6px 0 0">Sunucu eski hesabını bulamadığı için yeni hesap açıldı. Eski hesabın bu cihazda duruyor; geri yüklersen bakiyen geri gelir.</small></div>
+      <div class="pref-row" style="margin-top:10px"><label for="kCode">Hediye kodu<small>arkadaşından geldiyse</small></label>
+        <input type="text" id="kCode" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXXX"></div>
+      <div class="stack" style="margin-top:10px"><button type="button" id="kCodeUse" class="setting-btn">Kodu kullan</button></div>
     </div>
 
-    <div id="kOwner" hidden>
-      <h3 class="studio-sec">Hediye</h3>
-      <div class="card studio-card">
+    <div class="vt-panel" id="kHistWrap" style="display:none"><h3>Son talepler</h3><div class="src-stats" id="kHist" style="margin:0"></div></div>
+
+    <div class="vt-panel" id="kOwner" hidden>
+      <h3>Hediye (yönetici)</h3>
+      <div>
         <div class="pref-row"><label for="kAdm">Yönetici anahtarı<small>sunucudaki ADMIN_TOKEN</small></label>
           <input type="password" id="kAdm" autocomplete="off" spellcheck="false" placeholder="anahtar"></div>
         <div class="pref-row"><label for="kGiftAmt">Eklenecek kristal</label>
@@ -414,8 +438,8 @@
       </div>
     </div>
 
-    <p class="studio-foot">Paketi aldığında mail taslağı açılır. Kod, doğrulamadan sonra mail ile gönderilir.</p>
-    <p class="studio-foot" style="opacity:.6">Sayfa v9 · <span id="kVer">kristal.js eski ya da yüklenmedi</span></p>
+    <p class="vt-note">Paketi aldığında mail taslağı açılır. Kod, doğrulamadan sonra mail ile gönderilir.</p>
+    <p class="vt-note" style="opacity:.6">Sayfa v10 · <span id="kVer">kristal.js eski ya da yüklenmedi</span></p>
   </div>
 </div>
 
@@ -428,9 +452,11 @@
   </div>
 </div>
 
-<script src="js/core.js?v=2a6cb63a"></script>
-<script src="js/app.js?v=05f0f8af"></script>
-<script src="js/kristal.js?v=19a0e8ac"></script>
-<script src="js/seri.js?v=eae400f8"></script>
+<script src="js/core.js?v=087c7f10"></script>
+<script src="js/vitrin.js?v=ac001aa7"></script>
+<script src="js/app.js?v=87f74b04"></script>
+<script src="js/kristal.js?v=bcc0516e"></script>
+<script src="js/seri.js?v=e7e5617b"></script>
+<script src="js/kart.js?v=6da26b8f"></script>
 </body>
 </html>

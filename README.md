@@ -84,10 +84,12 @@ Kendi indeksim olduğu için resmî bir uyarının yerini tutmaz, can ve mal gü
 - Türkiye havalimanları için gerçek ölçüm (METAR), son 72 saat
 - Yağış, rüzgâr ve sıcaklık uyarıları ile bildirimler (cihazında üretilir)
 - Kayıtlı konumlar, şehir arama, GPS, rakım
-- İki tema: <mark>**Klasik**</mark> (varsayılan) ve <mark>**Çizgi film**</mark>. Çizgi film teması Ayarlar'dan açılır. Her ikisinde de gece/gündüz modu var.
+- Üç görünüm (<mark>**Sade**</mark>, <mark>**Klasik**</mark>, <mark>**Çizgi film**</mark>) ve Açık / Koyu / Sistem renk modu; Ayarlar'da önizleme kartlarıyla seçilir
+- Karne için ayrı sekme, paylaşım kartı (Hava, Karne, Seri) ve 81 il için şehir sayfaları
 - Yedek al / geri yükle, yazı boyutu ve eşik tercihleri
 - Ana ekrana eklenebilir (PWA), çevrimdışı çalışır
 - Sık sorulan sorular ve gizlilik sayfası
+- Seri ateşi: 12 kademeli alev (7, 14, 21... günde değişir), her 7. günde +60 kristal (seriyi sunucu hesaplar)
 - Kristal ödül sistemi (isteğe bağlı): günlük giriş ödülü, Mağaza ve hediye kodu. Hava verisinden bağımsızdır, küçük bir Cloudflare Worker + D1 sunucusunda çalışır.
 
 ## <img src="docs/h-08.svg" alt="Neler yok">
