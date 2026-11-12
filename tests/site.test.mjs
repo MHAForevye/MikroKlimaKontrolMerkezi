@@ -46,7 +46,7 @@ test('erişilebilirlik: atlama bağlantısı, tablist, adlı grafikler, sekme s�
   assert.match(html, /<a class="skip-link" href="#main"/); assert.match(html, /<main id="main"/);
   assert.match(html, /<nav class="tabbar" role="tablist"/);
   for (const id of ['weatherChart', 'metricChart']) assert.match(html, new RegExp('<canvas id="' + id + '" role="img" aria-label="[^"]+"'));
-  for (const t of ['today', 'detail', 'sources', 'settings']) assert.match(html, new RegExp('id="tab-' + t + '" role="tab"[^>]*aria-controls="panel-' + t + '"'));
+  for (const t of ['today', 'detail', 'karne', 'sources', 'settings']) assert.match(html, new RegExp('id="tab-' + t + '" role="tab"[^>]*aria-controls="panel-' + t + '"'));
   assert.match(app, /b\.tabIndex = on \? 0 : -1/);
 });
 test('erişilebilirlik: her <label for> var olan bir alana işaret eder', () => {

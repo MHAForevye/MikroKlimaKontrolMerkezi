@@ -86,4 +86,24 @@ function seriNext(old, today) {
   if (gotShield) st.shield = 1;
   return { st, ev, gotShield };
 }
-if (typeof module !== 'undefined' && module.exports) module.exports = { CATS, catOf, scoreOf, MEAN, MED, escHtml, esc, wmed, rtWhen, sadeText, seriNext, seriDayDiff, seriAddDays, seriClean };
+
+/* ===== Alev kademeleri: seri 7, 14, 21... gün olunca alevin rengi ve şekli değişir (12 kademe) =====
+   Kademe k, [7k, 7k+6] günlük seriye karşılık gelir (0: 1-6 gün, 11: 77 gün ve üstü). */
+const SERI_TIERS = [
+  { name: 'Kıvılcım', info: 'İlk küçük ateş. Her gün biraz daha büyür.' },
+  { name: 'Mum Alevi', info: 'Bir hafta! Sıcak turuncu, sakin ve düzgün yanar.' },
+  { name: 'Kamp Ateşi', info: 'İki hafta. Alev ikiye ayrıldı, çıtırdamaya başladı.' },
+  { name: 'Meşale', info: 'Üç hafta. Koyu kırmızı, ortasında altın bir çekirdek.' },
+  { name: 'Mavi Alev', info: 'Dört hafta. Daha sıcak yanan soğuk renk.' },
+  { name: 'Turkuaz Alev', info: 'Beş hafta. Üç dilimli, berrak ve parlak.' },
+  { name: 'Zümrüt Alev', info: 'Altı hafta. Yeşil ışık saçan nadir bir ateş.' },
+  { name: 'Mor Alev', info: 'Yedi hafta. Gece gökyüzü rengi, etrafında kıvılcımlar.' },
+  { name: 'Gül Alevi', info: 'Sekiz hafta. Pembe ve sıcak, halesi var.' },
+  { name: 'Altın Alev', info: 'Dokuz hafta. Işıl ışıl, yukarı yıldız savuruyor.' },
+  { name: 'Buz Alevi', info: 'On hafta. Beyaz-mavi, neredeyse gökten düşmüş gibi.' },
+  { name: 'Gökkuşağı', info: 'On bir hafta ve ötesi. Renkten renge geçen taçlı alev.' }
+];
+const seriTier = n => Math.max(0, Math.min(11, Math.floor((+n || 0) / 7)));
+const seriTierDay = k => k <= 0 ? 1 : 7 * k;                       // kademenin açıldığı gün
+const seriNextMilestone = n => (Math.floor((+n || 0) / 7) + 1) * 7;   // bir sonraki 7'nin katı (seri ödülü günü)
+if (typeof module !== 'undefined' && module.exports) module.exports = { CATS, catOf, scoreOf, MEAN, MED, escHtml, esc, wmed, rtWhen, sadeText, seriNext, seriDayDiff, seriAddDays, seriClean, SERI_TIERS, seriTier, seriTierDay, seriNextMilestone };

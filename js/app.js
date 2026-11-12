@@ -32,6 +32,7 @@ const ICONS = {
 };
 const BG = {sun:'#fcd34d',moon:'#fde68a',partly:'#fcd34d',cloud:'#94a3b8',fog:'#94a3b8',rain:'#60a5fa',snow:'#e0f2fe',storm:'#a78bfa',drop:'#38bdf8',thermo:'#f87171',wind:'#38bdf8',pin:'#f87171',refresh:'#38bdf8',faq:'#f9a8d4',clock:'#fde68a',calendar:'#86efac',gauge:'#c084fc',eye:'#38bdf8',arrow:'#38bdf8',umbrella:'#f472b6',bolt:'#fde047',leaf:'#4ade80',face:'#fb923c',bell:'#fde047',info:'#fde047',help:'#7dd3fc',trash:'#a7f3d0'};
 const ico = n => '<svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><g filter="url(#paint)"><ellipse cx="24" cy="25" rx="22" ry="20" fill="' + (BG[n] || '#94a3b8') + '" opacity=".22"/><g stroke="#4a3426" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">' + (ICONS[n] || '') + '</g></g></svg>';
+ICONS.share = '<circle cx="12" cy="24" r="5"/><circle cx="36" cy="11" r="5"/><circle cx="36" cy="37" r="5"/><path d="M16.5 21.5L31.5 13.5M16.5 26.5L31.5 34.5" fill="none"/>'; BG.share = '#a78bfa';
 const $ = id => document.getElementById(id);
 const PK = 'mk_prefs', PDEF = { fs: 17, tab: 'last', ref: 10, hot: 38, cold: 0, gust: 60 };
 let PREFS = Object.assign({}, PDEF);
@@ -39,7 +40,7 @@ function sanePrefs(o) {
   const r = Object.assign({}, PDEF), n = (v, d, a, b) => { v = parseFloat(String(v).replace(',', '.')); return isFinite(v) && v >= a && v <= b ? v : d; };
   if (o && typeof o === 'object') {
     r.fs = [15, 17, 19, 21].indexOf(+o.fs) >= 0 ? +o.fs : r.fs;
-    r.tab = ['last', 'today', 'detail', 'sources'].indexOf(o.tab) >= 0 ? o.tab : r.tab;
+    r.tab = ['last', 'today', 'detail', 'karne', 'sources'].indexOf(o.tab) >= 0 ? o.tab : r.tab;
     r.ref = [5, 10, 30, 60].indexOf(+o.ref) >= 0 ? +o.ref : r.ref;
     r.hot = n(o.hot, r.hot, -50, 70); r.cold = n(o.cold, r.cold, -50, 70); r.gust = n(o.gust, r.gust, 10, 200);
   }
@@ -119,9 +120,46 @@ async function geocode(q) {
     return d.results && d.results[0] ? d.results[0] : null;
   } catch (e) { return null; }
 }
-const TABS = ['today', 'detail', 'sources', 'settings'];
+/* ===== Ana ekrana ekle önerisi: Ayarlar'a 2. kez girildiğinde, bir kez, kapatılabilir ===== */
+let a2hsEvt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); a2hsEvt = e; });
+window.addEventListener('appinstalled', () => { track('a2hs/kuruldu', 'Ana ekrana eklendi'); });
+const isStandalone = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+function settingsVisit() {
+  let n = 0, shown = null;
+  try { n = (+localStorage.getItem('mk_set_n') || 0) + 1; localStorage.setItem('mk_set_n', String(n)); shown = localStorage.getItem('mk_a2hs'); } catch (e) { return; }
+  if (n !== 2 || shown || isStandalone() || sharedPresentation || !$('a2hs')) return;
+  try { localStorage.setItem('mk_a2hs', '1'); } catch (e) {}            // bir kez gösterilir, ne olursa olsun tekrar sorulmaz
+  const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+  $('a2hsTx').textContent = 'Daha hızlı açılır, uygulama gibi tam ekran çalışır ve internet yokken son tahmini gösterir. Bunu sadece bir kez soruyoruz.';
+  $('a2hsGo').textContent = a2hsEvt ? 'Ekle' : 'Nasıl eklenir?';
+  $('a2hs').hidden = false; track('a2hs/goster', 'Ana ekrana ekle önerisi gösterildi');
+  $('a2hsGo').onclick = async () => {
+    if (a2hsEvt) { try { a2hsEvt.prompt(); const r = await a2hsEvt.userChoice; track('a2hs/' + (r && r.outcome === 'accepted' ? 'kabul' : 'red'), 'Ana ekrana ekle: ' + (r && r.outcome)); } catch (e) {} $('a2hs').hidden = true; return; }
+    if ($('a2hsGo').dataset.steps) { $('a2hs').hidden = true; return; }
+    $('a2hsTx').textContent = ios ? 'Safari\'de alttaki Paylaş düğmesine dokun, sonra "Ana Ekrana Ekle"yi seç.' : 'Tarayıcının menüsünü (⋮) aç ve "Ana ekrana ekle" ya da "Uygulamayı yükle"yi seç.';
+    $('a2hsGo').textContent = 'Tamam'; $('a2hsGo').dataset.steps = '1'; track('a2hs/adimlar', 'Ana ekrana ekle: adımlar gösterildi');
+  };
+  $('a2hsNo').onclick = () => { $('a2hs').hidden = true; track('a2hs/kapat', 'Ana ekrana ekle önerisi kapatıldı'); };
+}
+
+/* ===== GoatCounter olayları: hangi sekme ne kadar kullanılıyor (kişisel veri yok; sadece olay adı sayılır) ===== */
+function track(path, title) { try { if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path: path, title: title || path, event: true }); } catch (e) {} }
+const TABS = ['today', 'detail', 'karne', 'sources', 'settings'];
+const TAB_NAME = { today: 'Tahmin', detail: 'Detay', karne: 'Karne', sources: 'Kaynaklar', settings: 'Ayarlar' };
+let tabNow = null, tabSince = Date.now();
+function tabFlush() {   // bir sekmede geçen süreyi kovaya at: 10 sn'den az, 10-60 sn, 1-5 dk, 5 dk üstü
+  if (!tabNow) return;
+  const sec = (Date.now() - tabSince) / 1000, b = sec < 10 ? 'lt10s' : sec < 60 ? '10-60s' : sec < 300 ? '1-5m' : '5m+';
+  track('sure/' + tabNow + '/' + b, 'Süre: ' + TAB_NAME[tabNow] + ' ' + b); tabSince = Date.now();
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') tabFlush(); else tabSince = Date.now(); });
 function showTab(t, save) {
   if (TABS.indexOf(t) < 0) t = 'today';
+  if (t !== tabNow) {
+    tabFlush(); if (save !== false || tabNow) track('sekme/' + t, 'Sekme: ' + TAB_NAME[t]); tabNow = t; tabSince = Date.now();
+    if (t === 'settings' && save !== false) { try { settingsVisit(); } catch (e) {} }   // 2. girişte Ana ekrana ekle önerisi
+  }
   TABS.forEach(k => {
     const on = k === t;
     $('panel-' + k).classList.toggle('active', on);
@@ -130,7 +168,8 @@ function showTab(t, save) {
   });
   if (t === 'detail') { try { if (chartInstance) chartInstance.resize(); if (metricChart) metricChart.resize(); } catch (e) {} }
   if (t === 'detail') setTimeout(() => { try { rtLoad(); mtLoad(); } catch (e) {} }, 50);
-  if (t === 'sources') setTimeout(() => { try { memRender(); } catch (e) {} }, 50);
+  if (t === 'sources' || t === 'karne') setTimeout(() => { try { memRender(); } catch (e) {} }, 50);
+  if (t === 'karne') { try { if (window.MKSeri) MKSeri.paint(); } catch (e) {} }
   try { const sb = $('selBlock'); if (t === 'detail') $('panel-detail').querySelector('.sel-hint').after(sb); else if (t === 'today') $('outlookCard').before(sb); } catch (e) {}
   window.scrollTo(0, 0);
   if (save !== false) { try { localStorage.setItem('mk_tab', t); } catch (e) {} }
@@ -226,7 +265,8 @@ function vizIcon(h) {
 
 /* ===== Veri çekme ===== */
 const HOURLY = 'temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,precipitation_probability,precipitation,snowfall,weather_code,surface_pressure,cloud_cover,visibility,wind_speed_10m,wind_gusts_10m,uv_index,is_day,cape';
-function setStatus(m, err) { const s = $('statusText'); s.textContent = m; s.style.color = err ? '#e5677f' : 'var(--subtext)'; }
+setTimeout(() => document.body.classList.remove('first-load'), 20000);
+function setStatus(m, err) { if (err) document.body.classList.remove('first-load'); const s = $('statusText'); s.textContent = m; s.style.color = err ? '#e5677f' : 'var(--subtext)'; }
 
 async function fetchWeatherData(auto) {
   const sel = $('locationSelect');
@@ -1017,6 +1057,7 @@ function renderHero() {
     ? h.date.slice(8, 10) + '.' + h.date.slice(5, 7) + '.' + h.date.slice(0, 4) + ' · ' + pad(h.hh) + ':00' + (range ? ' · ' + range : '')
     : range;
   const st = [['Nem', fmt(h.hum, 0, '%')], ['Rüzgâr', fmt(h.wind, 0, ' km/h')], ['UV', fmt(h.uv, 1)], ['Basınç', fmt(h.press, 0, ' hPa')]];
+  document.body.classList.remove('first-load');
   $('heroStats').innerHTML = st.map(x => '<div><div class="quick-item-title">' + x[0] + '</div><div class="quick-item-val">' + x[1] + '</div></div>').join('');
 }
 function openDay(i) { setMode('daily'); selectDay(i); showTab('today'); }
@@ -1119,14 +1160,56 @@ function applyChartTheme() {
 }
 function setTheme(t, save) {
   document.documentElement.setAttribute('data-theme', t);
-  if (save) { try { localStorage.setItem('mk_theme', t); } catch (e) {} }
+  if (save) { try { localStorage.setItem('mk_theme', t); } catch (e) {} document.documentElement.setAttribute('data-theme-mode', t); }
   const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = curSkin() !== 'pastel' ? (t === 'dark' ? '#0f172a' : '#f1f5f9') : (t === 'dark' ? '#1e1a2e' : '#fdf1dc');
-  const ic = $('themeIco'); if (ic) { ic.dataset.ico = t === 'dark' ? 'sun' : 'moon'; ic.innerHTML = ico(ic.dataset.ico); }
   applyChartTheme();
   if (hours.length) { try { renderMetric(win()); } catch (e) {} }
 }
+/* Renk modu: açık / koyu / sistem (sistem: cihazın ayarını izler, değişirse kendiliğinden döner) */
+const themeMode = () => { const m = document.documentElement.getAttribute('data-theme-mode'); return m === 'light' || m === 'dark' ? m : 'system'; };
+const sysDark = () => !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+function setThemeMode(mode, save) {
+  if (mode === 'light' || mode === 'dark') { setTheme(mode, !!save); document.documentElement.setAttribute('data-theme-mode', mode); }
+  else {
+    document.documentElement.setAttribute('data-theme-mode', 'system');
+    if (save) { try { localStorage.removeItem('mk_theme'); } catch (e) {} }
+    setTheme(sysDark() ? 'dark' : 'light', false);
+  }
+  renderPicker();
+}
+try { const mq = matchMedia('(prefers-color-scheme: dark)'), on = e => { if (themeMode() === 'system') setTheme(e.matches ? 'dark' : 'light', false); }; mq.addEventListener ? mq.addEventListener('change', on) : mq.addListener(on); } catch (e) {}
 $('btnNotif').addEventListener('click', toggleNotif);
-$('btnTheme').addEventListener('click', () => setTheme(curTheme() === 'dark' ? 'light' : 'dark', true));
+
+/* ===== Görünüm seçici (Vitrin kartları): karta dokun, açıklamayı oku, Uygula / Kapat ===== */
+const MODE_CARDS = [
+  ['light', 'Açık', '<span class="vt-mode"><span class="vt-mock light"><i></i><i class="s"></i><em></em></span></span>', 'Her zaman açık renkli arka plan. Gün ışığında ve dışarıda okumak için en rahatı.'],
+  ['dark', 'Koyu', '<span class="vt-mode"><span class="vt-mock dark"><i></i><i class="s"></i><em></em></span></span>', 'Koyu arka plan: geceleri gözü yormaz, OLED ekranlarda pil tasarrufu sağlar.'],
+  ['system', 'Sistem', '<span class="vt-mode"><span class="vt-mock sys"><i></i><i class="s"></i><em></em></span></span>', 'Telefonunun ya da bilgisayarının ayarına uyar. Cihaz geceleri koyuya geçince uygulama da geçer.']
+];
+const SKIN_CARDS = [
+  ['sade', 'Sade', '<span class="vt-sk sade"><span class="t">24°</span><span class="p"></span><span class="l"></span></span>', 'Büyük sıcaklık, tek cümlelik özet, az ayrıntı. Yeni başlayanlar için önerilen görünüm; Kaynaklar sekmesi gizlenir.'],
+  ['classic', 'Klasik', '<span class="vt-sk classic"><span class="t">24°</span><span class="l"></span><span class="l"></span><span class="r"><span></span><span></span><span></span></span></span>', 'Kartlı, düzenli ve eksiksiz görünüm. Tüm sekmeler ve ayrıntılar açık: kaynak karşılaştırması dahil.'],
+  ['pastel', 'Çizgi film', '<span class="vt-sk pastel"><span class="t">24°</span><span class="l"></span><span class="r"><span></span><span></span><span></span></span></span>', 'El çizimi kenarlıklar, pastel renkler ve oyuncu bir yazı tipi. Hava durumuna biraz neşe katar.']
+];
+function renderPicker() {
+  const V = window.MKVitrin, mb = $('modeShelf'), sb = $('skinShelf'); if (!V || !mb || !sb) return;
+  mb.textContent = ''; sb.textContent = '';
+  const curM = themeMode(), curS = curSkin();
+  const mk = (box, list, cur, kind, apply) => list.forEach((c, i) => {
+    const sel = c[0] === cur;
+    box.appendChild(V.card({
+      art: c[2], cls: sel ? 'sel' : '', delay: i * .4, label: c[1] + (sel ? ', seçili' : ''), tag: sel ? { kind: 'ok', text: c[1], sm: true } : { kind: 'text', text: c[1], sm: true },
+      onClick: () => V.open({
+        art: c[2], title: c[1], desc: c[3], wide: false,
+        chips: [kind + (sel ? ': şu an seçili' : '')],
+        primary: sel ? { label: 'Seçili', disabled: true } : { label: 'Uygula', fn: () => { apply(c[0]); track('gorunum/' + c[0], 'Görünüm: ' + c[1]); } }
+      })
+    }));
+  });
+  mk(mb, MODE_CARDS, curM, 'Renk modu', m => setThemeMode(m, true));
+  mk(sb, SKIN_CARDS, curS, 'Tema', k => setSkin(k, true));
+}
+
 function setSkin(s, save) {
   s = SKINS.indexOf(s) >= 0 ? s : 'sade';
   document.documentElement.setAttribute('data-skin', s);
@@ -1135,6 +1218,7 @@ function setSkin(s, save) {
   const more = $('detailMoreTxt'); if (more) { if (!more.dataset.orig) more.dataset.orig = more.textContent; more.textContent = s === 'sade' ? 'Ayrıntıları gör →' : more.dataset.orig; }
   setTheme(curTheme(), false);
   try { if (hours.length) renderHero(); } catch (e) {}
+  try { renderPicker(); } catch (e) {}
 }
 
 document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.hour-chip,.day-chip')) { e.preventDefault(); e.target.click(); } });
@@ -1156,7 +1240,7 @@ $('prefHot').addEventListener('change', () => readNum('prefHot', 'hot'));
 $('prefCold').addEventListener('change', () => readNum('prefCold', 'cold'));
 $('prefGust').addEventListener('change', () => readNum('prefGust', 'gust'));
 $('btnBackup').addEventListener('click', async () => {
-  const txt = JSON.stringify({ mk: 1, locs: savedLocations, prefs: PREFS, theme: curTheme(), skin: curSkin(), kr: window.MKKristal ? MKKristal.exportData() : undefined });
+  const txt = JSON.stringify({ mk: 1, locs: savedLocations, prefs: PREFS, theme: curTheme(), mode: themeMode(), skin: curSkin(), kr: window.MKKristal ? MKKristal.exportData() : undefined });
   try { await navigator.clipboard.writeText(txt); alert('Yedek kopyalandı.'); }
   catch (e) { prompt('Kopyalama izni yok. Bu metni elle kopyala:', txt); }
 });
@@ -1168,7 +1252,8 @@ $('btnRestore').addEventListener('click', () => {
     if (!L.length) throw new Error('konum yok');
     savedLocations = L.map(l => ({ name: String(l.name), lat: String(l.lat), lon: String(l.lon), alt: l.alt == null ? '' : String(l.alt) }));
     safeStore(); PREFS = sanePrefs(o.prefs); savePrefs(); applyFont(); fillPrefs(); scheduleRefresh();
-    if (o.theme === 'dark' || o.theme === 'light') setTheme(o.theme, true);
+    if (o.mode === 'system') setThemeMode('system', true);
+    else if (o.theme === 'dark' || o.theme === 'light') setTheme(o.theme, true);
     if (SKINS.indexOf(o.skin) >= 0) setSkin(o.skin, true);
     initLocations(0); fetchWeatherData();
     if (o.kr && window.MKKristal) MKKristal.importData(o.kr);
@@ -1350,7 +1435,7 @@ function memRender() {
 }
 function memTick() {
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-  memRecord(); memVerify(); if ($('panel-sources').classList.contains('active')) memRender();
+  memRecord(); memVerify(); if ($('panel-sources').classList.contains('active') || $('panel-karne').classList.contains('active')) memRender();
 }
 function memToggle() { try { localStorage.setItem(MKON, memOn() ? '0' : '1'); } catch (e) {} memRender(); scheduleFuse(); }
 function memExport() { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(memLoad())], { type: 'application/json' })); a.download = 'mikro-klima-kontrol-merkezi-karne.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
@@ -1444,7 +1529,9 @@ const ACT = {
   openDay: a => openDay(+a),
   setMetric: a => setMetric(a),
   pickLoc: a => pickLoc(+a),
-  setSkin: a => setSkin(a, true)
+  setSkin: a => setSkin(a, true),
+  openStore: () => { if (window.MKKristal) MKKristal.openStore(); },
+  kartOpen: () => { if (window.MKKart) MKKart.open(); }
 };
 document.addEventListener('click', e => {
   const el = e.target.closest && e.target.closest('[data-act]');
@@ -1534,6 +1621,11 @@ function readSharedView() {
     try { name = decodeURIComponent(name); } catch (e) {}
   }
 
+  let city = false;
+  if ((!lat || !lon) && params.has('yer')) {   // şehir sayfalarından gelen bağlantı: ?yer=enlem,boylam,Ad
+    const parts = params.get('yer').split(',');
+    lat = parts[0]; lon = parts[1]; name = parts.slice(2).join(',').slice(0, 60); city = true;
+  }
   let locIndex = -1;
   const latitude = Number(lat), longitude = Number(lon);
   if (lat !== null && lon !== null && isFinite(latitude) && isFinite(longitude) &&
@@ -1548,6 +1640,7 @@ function readSharedView() {
         alt: ''
       });
       locIndex = 0;
+      if (city) safeStore();   // şehir sayfasından gelen konum kayıtlı konumlara eklenir
     }
   }
 
@@ -1555,7 +1648,7 @@ function readSharedView() {
   const hour = params.has('h') ? Number(params.get('h')) : null;
   const mode = params.get('mode');
   return {
-    locIndex,
+    locIndex, city,
     isShared: params.get('view') === 'share' || params.has('p') || params.has('loc') || params.has('lat') || params.has('lon'),
     time: params.get('time'),
     mode: mode === 'daily' ? 'daily' : 'hourly',
@@ -1603,7 +1696,7 @@ function applySharedView(shared) {
 
 const sharedView = readSharedView();
 sharedPresentation = sharedView.isShared;
-sharedCoordinatesHidden = sharedView.locIndex >= 0;
+sharedCoordinatesHidden = sharedView.locIndex >= 0 && !sharedView.city;
 document.body.classList.toggle('share-presentation', sharedPresentation);
 let selName = null;
 try { selName = localStorage.getItem(SELK); } catch (e) {}

@@ -12,15 +12,16 @@
     oldKey: 'mk_kristal',
     owner: 'llbha0uxr6'                           // gizli kelimenin özeti: sadece yönetici bölümünü AÇAR, yetki vermez (yetki sunucuda ADMIN_TOKEN)
   };
-  var SCFG = { daily: 30, packs: [{ name: '3 Günlük Paket', short: '3 günlük', cost: 500 }, { name: '7 Günlük Paket (Haftalık)', short: '7 günlük', cost: 1000 }] };
+  var SCFG = { daily: 30, streak: { every: 7, bonus: 60 }, packs: [{ name: '3 Günlük Paket', short: '3 günlük', cost: 500 }, { name: '7 Günlük Paket (Haftalık)', short: '7 günlük', cost: 1000 }] };
 
   var $ = function (id) { return document.getElementById(id); };
-  var S = blank(), creds = null, todayS = '', offline = false, busy = false, lastSync = 0, reinit = false, madeList = [], lastNo = '';
+  var timerT = 0, S = blank(), creds = null, todayS = '', offline = false, busy = false, lastSync = 0, reinit = false, madeList = [], lastNo = '';
 
-  function blank() { return { id: '--------', bal: 0, earned: 0, gift: 0, spent: 0, days: 0, first: '', last: '', cam: '', pending: '', reqs: [], codes: [] }; }
+  function blank() { return { id: '--------', bal: 0, earned: 0, gift: 0, spent: 0, days: 0, first: '', last: '', cam: '', pending: '', reqs: [], codes: [], streak: { n: 0, best: 0, shield: 0, paid: 0, last: '' } }; }
   function norm(s) {
     var b = blank(); for (var k in b) if (s && s[k] !== undefined && s[k] !== null) b[k] = s[k];
     if (!Array.isArray(b.reqs)) b.reqs = []; if (!Array.isArray(b.codes)) b.codes = [];
+    if (!b.streak || typeof b.streak !== 'object') b.streak = blank().streak;
     return b;
   }
 
@@ -57,11 +58,13 @@
     if (d.cfg) SCFG = d.cfg;
     if (d.today) todayS = d.today;
     offline = false; saveLocal(d.cfg);
+    if (d.streakBonus > 0) setTimeout(function () { toast('Seri ödülü: +' + d.streakBonus + ' kristal! ' + S.streak.n + '. gün.'); }, 600);
+    try { document.dispatchEvent(new CustomEvent('mk:state')); } catch (e) {}
   }
   function sync() {
     if (busy) return Promise.resolve();
     busy = true; lastSync = Date.now();
-    return api(creds ? '/sync' : '/init').then(function (d) { apply(d); render(); }, function (e) {
+    return api(creds ? '/sync' : '/init', creds && window.MKSeri && MKSeri.localHint() ? { hint: MKSeri.localHint() } : {}).then(function (d) { apply(d); render(); }, function (e) {
       if (e.status === 401 && creds && !reinit) {      // kimlik sunucuda yok: eskisini yedekle, yeni hesap aç
         reinit = true;
         try { localStorage.setItem(CFG.key + '_old', localStorage.getItem(CFG.key) || ''); } catch (x) {}
@@ -206,12 +209,52 @@
     });
   }
 
+  /* ===== Vitrin: paket penceresi, ücretsiz ödüller, geri sayım ===== */
+  function openPack(i) {
+    var pk = SCFG.packs[i]; if (!pk) return;
+    var ok = S.bal >= pk.cost, n = parseInt(pk.short, 10) || 0, need = Math.max(0, pk.cost - S.bal);
+    MKVitrin.open({
+      art: MKVitrin.art.camera(n), title: pk.name,
+      desc: CFG.app + ' için ' + pk.short + ' aktivasyon hakkı. Alınca talebin sunucuda kayıt altına alınır ve mail taslağı açılır; kod, doğrulamadan sonra mail ile gönderilir.',
+      chips: ['Fiyat: ' + pk.cost + ' kristal', 'Bakiyen: ' + S.bal],
+      note: ok ? (S.cam.length >= 3 || ($('kCamId') && $('kCamId').value.trim().length >= 3) ? '' : CFG.app + " ID'ni aşağıdaki alana yazmayı unutma.") : 'Yetersiz kristal · yaklaşık ' + Math.ceil(need / SCFG.daily) + ' gün daha (seri ödülü hesaba katılmadan).',
+      primary: { label: 'Al', cost: pk.cost, disabled: !ok, fn: function () { setTimeout(function () { buy(i); }, 30); } }
+    });
+  }
+  function nextRewardText() {
+    var ms = 864e5 - ((Date.now() + 3 * 3600e3) % 864e5), h = Math.floor(ms / 3600e3), m = Math.floor(ms % 3600e3 / 60e3);
+    return (h ? h + ' sa ' : '') + m + ' dk';
+  }
+  function tickTimer() { var t = $('vtTimer'); if (t) t.textContent = 'Sonraki günlük ödül: ' + nextRewardText(); }
+  function renderFree() {
+    var box = $('freeShelf'); if (!box || !window.MKVitrin) return;
+    box.textContent = '';
+    var V = MKVitrin, got = S.last && S.last === todayS, sk = window.MKSeri ? MKSeri.info() : { n: 0, every: 7, bonus: 60, best: 0 };
+    var into = sk.n % sk.every === 0 && sk.n ? sk.every : sk.n % sk.every;
+    box.appendChild(V.card({
+      art: V.art.calendar('+' + SCFG.daily), delay: 0, label: 'Günlük giriş ödülü, +' + SCFG.daily + ' kristal',
+      tag: got ? { kind: 'ok', text: 'Alındı', sm: true } : { kind: 'text', text: 'Bekliyor', sm: true },
+      onClick: function () { V.open({ art: V.art.calendar('+' + SCFG.daily), title: 'Günlük giriş', desc: 'Siteyi her gün açtığında ' + SCFG.daily + ' kristal kazanırsın. Ödül sunucuda otomatik verilir, bir şey yapman gerekmez.', chips: ['Toplam giriş günü: ' + S.days, got ? 'Bugünkü ödül alındı' : 'Bugünkü ödül hazırlanıyor', 'Sonraki: ' + nextRewardText() + ' sonra'] }); }
+    }));
+    box.appendChild(V.card({
+      art: window.MKSeri ? MKSeri.flame(MKSeri.shownTier()) : V.art.gem(), delay: .4, label: 'Seri ödülü, ' + sk.every + ' günde bir +' + sk.bonus + ' kristal',
+      tag: { kind: into === sk.every ? 'ok' : 'text', text: into === sk.every ? 'Alındı' : into + '/' + sk.every, sm: true },
+      onClick: function () { V.open({ art: window.MKSeri ? MKSeri.flame(MKSeri.shownTier()) : V.art.gem(), title: 'Seri ödülü', desc: 'Siteyi üst üste her ' + sk.every + '. gün açtığında ' + sk.bonus + ' kristal daha kazanırsın. Tek günü kaçırırsan kalkan seriyi sessizce korur. Seri ' + sk.every + ' günde bir yeni alev kazandırır.', chips: ['Serin: ' + sk.n + ' gün', 'Sonraki ödül: ' + seriNextMilestone(sk.n) + '. gün', 'En uzun serin: ' + sk.best + ' gün'] }); }
+    }));
+    box.appendChild(V.card({
+      art: V.art.gift(), delay: .8, label: 'Hediye kodu',
+      tag: { kind: 'text', text: 'Kod gir', sm: true },
+      onClick: function () { V.open({ art: V.art.gift(), title: 'Hediye kodu', desc: 'Arkadaşından ya da Forevye\'den bir hediye kodu aldıysan kristalin hesabına eklenir. Kod XXXX-XXXX-XXXXX biçimindedir ve yalnızca kendi Site ID\'n için çalışır.', primary: { label: 'Kodu gir', cls: 'blue', fn: function () { setTimeout(function () { var c = $('kCode'); if (c) { c.scrollIntoView({ behavior: 'smooth', block: 'center' }); c.focus(); } }, 60); } } }); }
+    }));
+  }
+
   /* ===== Ekran ===== */
   function render() {
     if (!$('storePage')) return;
     if ($('kVer')) $('kVer').textContent = 'kristal.js v9 yüklü (sunucu)';
     if ($('kOldWrap')) $('kOldWrap').hidden = !oldCreds();
     $('kBal').textContent = S.bal;
+    if ($('kBal2')) $('kBal2').textContent = S.bal;
     $('kId').textContent = S.id;
     if (document.activeElement !== $('kCamId')) $('kCamId').value = S.cam;
     $('kToday').textContent = (offline ? 'Sunucuya bağlanılamadı, son bilinen bakiye gösteriliyor. ' : '') +
@@ -219,21 +262,14 @@
 
     var box = $('kPacks'); box.textContent = '';
     SCFG.packs.forEach(function (pk, i) {
-      var ok = S.bal >= pk.cost;
-      var b = document.createElement('button');
-      b.type = 'button'; b.className = 'setting-btn k-pack' + (ok ? '' : ' k-off');
-      b.setAttribute('aria-disabled', ok ? 'false' : 'true');
-      var ic = document.createElement('span'); ic.className = 'ico'; ic.dataset.ico = 'gem'; ic.style.setProperty('--s', '22px');
-      var tx = document.createElement('span'); tx.className = 'k-pack-tx';
-      tx.appendChild(document.createTextNode(pk.name));
-      var sm = document.createElement('small');
-      sm.textContent = ok ? 'Paketi Al' : 'Yetersiz kristal · yaklaşık ' + Math.ceil((pk.cost - S.bal) / SCFG.daily) + ' gün daha';
-      tx.appendChild(sm);
-      var st = document.createElement('span'); st.className = 'state'; st.textContent = pk.cost + ' kristal';
-      b.appendChild(ic); b.appendChild(tx); b.appendChild(st);
-      b.addEventListener('click', function () { buy(i); });
-      box.appendChild(b);
+      var ok = S.bal >= pk.cost, n = parseInt(pk.short, 10) || 0;
+      box.appendChild(MKVitrin.card({
+        art: MKVitrin.art.camera(n), cap: '', delay: i * .5, label: pk.name + ', ' + pk.cost + ' kristal',
+        tag: { kind: 'price', text: String(pk.cost), off: !ok },
+        onClick: function () { openPack(i); }
+      }));
     });
+    renderFree(); tickTimer();
     $('kLow').hidden = S.bal >= Math.min.apply(null, SCFG.packs.map(function (p) { return p.cost; }));
 
     var pr = pendingReq(), pb = $('kPending');
@@ -256,11 +292,12 @@
 
   /* ===== Mağaza sayfası ===== */
   function openStore() {
-    var p = $('storePage'); render(); sync();
+    var p = $('storePage'); render(); sync(); if (window.MKSeri) MKSeri.renderShelf();
+    clearInterval(timerT); timerT = setInterval(tickTimer, 30000);
     p.classList.add('show'); p.scrollTop = 0; document.body.style.overflow = 'hidden'; $('storeBack').focus();
   }
   function closeStore() {
-    $('storePage').classList.remove('show'); document.body.style.overflow = ''; $('kOwner').hidden = true;
+    $('storePage').classList.remove('show'); document.body.style.overflow = ''; clearInterval(timerT); $('kOwner').hidden = true;
     if ($('kAdm')) $('kAdm').value = '';
     var b = $('btnStore'); if (b) b.focus();
   }
@@ -279,6 +316,7 @@
         '<path d="M43 2.5v7M39.5 6h7" fill="none" stroke="#fde047" stroke-width="3"/>';
       if (typeof BG !== 'undefined') BG.gem = '#7dd3fc';
     }
+    document.querySelectorAll('[data-vt]').forEach(function (e) { var f = window.MKVitrin && MKVitrin.art[e.dataset.vt]; if (f) e.outerHTML = f(); });
     loadLocal();
     render();
     sync();                        // ödül sunucuda işlenir; sadece Mağaza sayfasında görünür
@@ -321,6 +359,9 @@
   /* Yedek / geri yükleme (app.js bunu çağırır). Yedek artık bakiye değil, hesap anahtarını taşır:
      metni gören kişi hesabı açabilir, o yüzden yedek metnini kimseyle paylaşma. */
   window.MKKristal = {
+    streak: function () { return S && S.streak ? S.streak : null; },
+    cfg: function () { return SCFG; },
+    openStore: function () { if ($('storePage')) openStore(); },
     exportData: function () { return creds ? { id: creds.id, token: creds.token } : undefined; },
     importData: function (o) {
       if (!o || !/^\d{8}$/.test(String(o.id)) || !/^[A-Za-z0-9_-]{20,64}$/.test(String(o.token))) {

@@ -118,3 +118,12 @@ test('seri: bozuk kayıt çökmez, yeniden başlar', () => {
   assert.deepEqual(r.st.h, ['2026-11-09', '2026-11-10']); assert.equal(r.st.n, 4);
 });
 test('seri: gün farkı ve ekleme tutarlı', () => { assert.equal(seriDayDiff('2026-02-27', '2026-03-01'), 2); assert.equal(seriAddDays('2026-12-31', 1), '2027-01-01'); });
+
+import { seriTier, seriTierDay, seriNextMilestone, SERI_TIERS } from '../js/core.js';
+test('alev kademeleri: 12 kademe, 7 günde bir değişir, 77+ günde sabit kalır', () => {
+  assert.equal(SERI_TIERS.length, 12);
+  assert.deepEqual([1, 6, 7, 13, 14, 21, 76, 77, 500].map(seriTier), [0, 0, 1, 1, 2, 3, 10, 11, 11]);
+  assert.equal(seriTierDay(0), 1); assert.equal(seriTierDay(3), 21);
+  assert.equal(seriNextMilestone(1), 7); assert.equal(seriNextMilestone(7), 14); assert.equal(seriNextMilestone(20), 21);
+  for (const t of SERI_TIERS) assert.ok(t.name && t.info);
+});
