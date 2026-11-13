@@ -45,7 +45,7 @@
     var h = { 'Content-Type': 'application/json' };
     if (creds) h.Authorization = 'Bearer ' + creds.id + '.' + creds.token;
     if (admin) h['X-MK-Admin'] = admin;
-    return fetch('/api' + path, { method: 'POST', headers: h, body: JSON.stringify(body || {}), cache: 'no-store' }).then(function (r) {
+    return fetch('https://mikroklimakontrolmerkezi.forevye.workers.dev/api' + path, { method: 'POST', headers: h, body: JSON.stringify(body || {}), cache: 'no-store' }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (d) {
         if (!r.ok) { var e = new Error(d.err || 'Sunucu hatası'); e.status = r.status; e.data = d; throw e; }
         return d;
