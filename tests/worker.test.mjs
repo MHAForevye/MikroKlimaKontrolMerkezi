@@ -150,3 +150,118 @@ test('seri: sunucu kuralları core.js seriNext ile aynı sonucu verir (rastgele 
     assert.equal(b.n, a.n, 'gün ' + day); assert.equal(b.shield, a.shield, 'kalkan ' + day);
   }
 });
+
+/* ===== Mantar Pano geçişleri (Pro 120 / Sınırsız 250, 7 gün) ===== */
+const ADM = { 'X-MK-Admin': 'x'.repeat(24) };
+async function mpSetup() {
+  const s = await setup(), mod = await import('../worker/index.js');
+  const a = await s.call('/api/init');
+  await s.call('/api/admin/add', { to: a.j.id, n: 1000 }, ADM);
+  const redeem = (code, device = 'dev-aaaa1', extra = {}, path = '/api/mantarpano/redeem', ip = '5.5.5.5') =>
+    s.call(path, { code, app: 'mantarpano', device, v: 1, ...extra }, {}, ip);
+  return { ...s, mod, a, redeem };
+}
+
+test('pass/buy: yetersiz bakiyede reddeder, yeterliyse kristali düşer ve 13 harflik kod verir', { skip }, async () => {
+  const { call, a } = await mpSetup();
+  const b = await call('/api/init'); // 30 kristalli başka hesap
+  const no = await call('/api/pass/buy', { tier: 'pro' }, bearer(b));
+  assert.equal(no.s, 400); assert.equal(no.j.s.bal, 30); assert.equal(no.j.s.passes.length, 0);
+  assert.equal((await call('/api/pass/buy', { tier: 'altin' }, bearer(a))).s, 400);
+  const ok = await call('/api/pass/buy', { tier: 'pro' }, bearer(a));
+  assert.equal(ok.s, 200); assert.equal(ok.j.s.bal, 1030 - 120); assert.match(ok.j.pass.c, /^[A-Z2-9]{13}$/);
+  assert.equal(ok.j.pass.tier, 'pro'); assert.equal(ok.j.s.passes.length, 1); assert.equal(ok.j.s.passes[0].used, null);
+  const u = await call('/api/pass/buy', { tier: 'unl' }, bearer(a));
+  assert.equal(u.j.s.bal, 910 - 250);
+  assert.deepEqual(u.j.cfg.mantar.tiers.map(t => t.cost), [120, 250]);
+});
+
+test('mantarpano/redeem: ilk kullanımda 7 gün başlar, aynı cihaz aynı bitişi alır, tire ve küçük harf kabul', { skip }, async () => {
+  const { call, a, redeem } = await mpSetup();
+  const code = (await call('/api/pass/buy', { tier: 'pro' }, bearer(a))).j.pass.c;
+  const t0 = Date.now(), r1 = await redeem(code.slice(0, 4).toLowerCase() + '-' + code.slice(4, 8) + '-' + code.slice(8));
+  assert.equal(r1.s, 200); assert.equal(r1.j.ok, true); assert.equal(r1.j.app, 'mantarpano'); assert.equal(r1.j.plan, 'pro');
+  assert.ok(Math.abs(r1.j.expiresAt - (t0 + 7 * 864e5)) < 5000);
+  const r2 = await redeem(code);
+  assert.equal(r2.j.expiresAt, r1.j.expiresAt, 'aynı cihaz: aynı bitiş (idempotent)');
+  const st = await call('/api/sync', {}, bearer(a));
+  assert.ok(st.j.s.passes[0].used > 0 && st.j.s.passes[0].exp * 1000 === r1.j.expiresAt);
+});
+
+test('mantarpano/redeem: ikinci cihaz bağlanır, üçüncü reddedilir; Sınırsız plan "unlimited" döner', { skip }, async () => {
+  const { call, a, redeem } = await mpSetup();
+  const code = (await call('/api/pass/buy', { tier: 'unl' }, bearer(a))).j.pass.c;
+  const r1 = await redeem(code, 'dev-aaaa1'); assert.equal(r1.j.plan, 'unlimited');
+  const r2 = await redeem(code, 'dev-bbbb2'); assert.equal(r2.s, 200); assert.equal(r2.j.expiresAt, r1.j.expiresAt);
+  const r3 = await redeem(code, 'dev-cccc3'); assert.equal(r3.s, 409); assert.equal(r3.j.error, 'used'); assert.equal(r3.j.ok, false);
+  assert.equal((await redeem(code, 'dev-aaaa1')).s, 200, 'bağlı cihaz yine girebilir');
+});
+
+test('mantarpano/redeem: hatalar (yanlış uygulama, bozuk/bilinmeyen kod, cihaz yok, süresi dolmuş)', { skip }, async () => {
+  const { call, a, env, redeem } = await mpSetup();
+  const code = (await call('/api/pass/buy', { tier: 'pro' }, bearer(a))).j.pass.c;
+  assert.equal((await redeem(code, 'dev-aaaa1', { app: 'astrocam' })).j.error, 'wrong_app');
+  assert.equal((await redeem('KISA')).j.error, 'invalid_code');
+  const unknown = await redeem('ABCDEFGHJKLMN'); assert.equal(unknown.s, 404); assert.equal(unknown.j.error, 'invalid_code');
+  assert.equal((await redeem(code, '')).s, 400);
+  // hediye kristal kodu Mantar Pano'da geçmez
+  const g = await call('/api/admin/gift', { to: a.j.id, n: 5 }, ADM);
+  assert.equal((await redeem(g.j.code)).j.error, 'invalid_code');
+  assert.equal((await redeem(code)).s, 200);
+  env.db.prepare('UPDATE passes SET exp=? WHERE code=?').run(Math.floor(Date.now() / 1000) - 10, code);
+  const ex = await redeem(code); assert.equal(ex.s, 410); assert.equal(ex.j.error, 'expired');
+});
+
+test('mantarpano/verify: etkinleştirmez ve cihaz bağlamaz; bağlı cihaz için geçerliyse ok, değilse hata', { skip }, async () => {
+  const { call, a, redeem } = await mpSetup();
+  const code = (await call('/api/pass/buy', { tier: 'pro' }, bearer(a))).j.pass.c, V = '/api/mantarpano/verify';
+  assert.equal((await redeem(code, 'dev-aaaa1', {}, V)).j.error, 'invalid_code', 'henüz etkinleştirilmemiş kod verify ile başlamaz');
+  const r = await redeem(code, 'dev-aaaa1');
+  const v = await redeem(code, 'dev-aaaa1', {}, V); assert.equal(v.s, 200); assert.equal(v.j.expiresAt, r.j.expiresAt);
+  const other = await redeem(code, 'dev-zzzz9', {}, V); assert.equal(other.s, 409); assert.equal(other.j.error, 'used');
+  assert.equal((await call('/api/pass/buy', { tier: 'pro' }, bearer(a))).j.s.passes.length, 2);
+});
+
+test('CORS: OPTIONS 204, yanıtlarda Access-Control-Allow-Origin; MP_ORIGIN ayarlıysa sadece o adres', { skip }, async () => {
+  const { mod, env } = await mpSetup();
+  const pre = await mod.default.fetch(new Request('https://t/api/mantarpano/redeem', { method: 'OPTIONS', headers: { Origin: 'https://x.github.io' } }), env);
+  assert.equal(pre.status, 204); assert.equal(pre.headers.get('Access-Control-Allow-Origin'), '*');
+  assert.match(pre.headers.get('Access-Control-Allow-Headers'), /Content-Type/);
+  env.MP_ORIGIN = 'https://x.github.io';
+  const r = await mod.default.fetch(new Request('https://t/api/mantarpano/redeem', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }), env);
+  assert.equal(r.headers.get('Access-Control-Allow-Origin'), 'https://x.github.io');
+  const other = await mod.default.fetch(new Request('https://t/api/sync', { method: 'OPTIONS' }), env);
+  assert.equal(other.status, 405, 'hesaplı uçlarda CORS açılmaz');
+});
+
+test('imzalı jeton: MP_SIGN_KEY varsa yanıta ECDSA token eklenir; istemci (premium.js) ile aynı yöntemle doğrulanır', { skip }, async () => {
+  const { call, a, env, redeem } = await mpSetup();
+  const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+  env.MP_SIGN_KEY = JSON.stringify(await crypto.subtle.exportKey('jwk', kp.privateKey));
+  const code = (await call('/api/pass/buy', { tier: 'unl' }, bearer(a))).j.pass.c;
+  const r = await redeem(code, 'dev-aaaa1'); assert.ok(r.j.token);
+  const [p, s] = r.j.token.split('.'), b64 = x => Uint8Array.from(atob(x.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(x.length / 4) * 4, '=')), c => c.charCodeAt(0));
+  assert.ok(await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, kp.publicKey, b64(s), new TextEncoder().encode(p)));
+  assert.deepEqual(JSON.parse(new TextDecoder().decode(b64(p))), { app: 'mantarpano', plan: 'unlimited', exp: r.j.expiresAt, dev: 'dev-aaaa1' });
+  const noKey = await mpSetup(); const c2 = (await noKey.call('/api/pass/buy', { tier: 'pro' }, bearer(noKey.a))).j.pass.c;
+  assert.equal((await noKey.redeem(c2)).j.token, undefined, 'anahtar yoksa token eklenmez');
+});
+
+test('hız sınırı: kod bozdurma IP başına 40 (429 rate_limited), yenileme kontrolü 300 sonra 503 (premium kapanmaz)', { skip }, async () => {
+  const { redeem } = await mpSetup();
+  let r; for (let i = 0; i < 41; i++) r = await redeem('ABCDEFGHJKLMN');
+  assert.equal(r.s, 429); assert.equal(r.j.error, 'rate_limited');
+  const ok = await redeem('ABCDEFGHJKLMN', 'dev-aaaa1', {}, '/api/mantarpano/redeem', '8.8.8.8'); assert.equal(ok.s, 404, 'başka IP etkilenmez');
+  let v; for (let i = 0; i < 301; i++) v = await redeem('ABCDEFGHJKLMN', 'dev-aaaa1', {}, '/api/mantarpano/verify', '7.7.7.7');
+  assert.equal(v.s, 503);
+});
+
+test('admin/pass: yönetici ücretsiz kod üretir (gün ayarlı), kod bozdurulur; anahtarsız reddedilir', { skip }, async () => {
+  const { call, redeem } = await mpSetup();
+  assert.equal((await call('/api/admin/pass', { tier: 'pro' }, { 'X-MK-Admin': 'yanlis-anahtar-yanlis-anahtar' })).s, 403);
+  assert.equal((await call('/api/admin/pass', { tier: 'altin' }, ADM)).s, 400);
+  const g = await call('/api/admin/pass', { tier: 'unl', days: 30 }, ADM);
+  assert.equal(g.s, 200); assert.match(g.j.code, /^[A-Z2-9]{13}$/);
+  const t0 = Date.now(), r = await redeem(g.j.code);
+  assert.equal(r.j.plan, 'unlimited'); assert.ok(Math.abs(r.j.expiresAt - (t0 + 30 * 864e5)) < 5000);
+});

@@ -1,4 +1,4 @@
-/* Kristal ödül sistemi: günlük giriş + Mağaza (Astrophoto Cam aktivasyon talebi) + hediye kodu.
+/* Kristal ödül sistemi: günlük giriş + Mağaza (Astrophoto Cam aktivasyon talebi + Mantar Pano Pro/Sınırsız kodu) + hediye kodu.
    Bakiye, günlük ödül, satın alma ve hediye kodları artık Cloudflare Worker + D1 üzerinde tutulur (worker/index.js).
    Bu dosya sadece sunucuya ister ve sonucu gösterir; tarayıcıdaki sayıyı değiştirmek hiçbir şeyi değiştirmez.
    Fiyatlar ve günlük ödül sunucuda (worker/index.js içindeki CFG). Buradaki değerler sunucu cevap verene kadar gösterilir. */
@@ -12,15 +12,15 @@
     oldKey: 'mk_kristal',
     owner: 'llbha0uxr6'                           // gizli kelimenin özeti: sadece yönetici bölümünü AÇAR, yetki vermez (yetki sunucuda ADMIN_TOKEN)
   };
-  var SCFG = { daily: 30, streak: { every: 7, bonus: 60 }, packs: [{ name: '3 Günlük Paket', short: '3 günlük', cost: 500 }, { name: '7 Günlük Paket (Haftalık)', short: '7 günlük', cost: 1000 }] };
+  var SCFG = { daily: 30, streak: { every: 7, bonus: 60 }, packs: [{ name: '3 Günlük Paket', short: '3 günlük', cost: 500 }, { name: '7 Günlük Paket (Haftalık)', short: '7 günlük', cost: 1000 }], mantar: { days: 7, tiers: [{ id: 'pro', name: 'Mantar Pano Pro', short: 'Pro', cost: 120 }, { id: 'unl', name: 'Mantar Pano Sınırsız', short: 'Sınırsız', cost: 250 }] } };
 
   var $ = function (id) { return document.getElementById(id); };
   var timerT = 0, S = blank(), creds = null, todayS = '', offline = false, busy = false, lastSync = 0, reinit = false, madeList = [], lastNo = '';
 
-  function blank() { return { id: '--------', bal: 0, earned: 0, gift: 0, spent: 0, days: 0, first: '', last: '', cam: '', pending: '', reqs: [], codes: [], streak: { n: 0, best: 0, shield: 0, paid: 0, last: '' } }; }
+  function blank() { return { id: '--------', bal: 0, earned: 0, gift: 0, spent: 0, days: 0, first: '', last: '', cam: '', pending: '', reqs: [], codes: [], passes: [], streak: { n: 0, best: 0, shield: 0, paid: 0, last: '' } }; }
   function norm(s) {
     var b = blank(); for (var k in b) if (s && s[k] !== undefined && s[k] !== null) b[k] = s[k];
-    if (!Array.isArray(b.reqs)) b.reqs = []; if (!Array.isArray(b.codes)) b.codes = [];
+    if (!Array.isArray(b.reqs)) b.reqs = []; if (!Array.isArray(b.codes)) b.codes = []; if (!Array.isArray(b.passes)) b.passes = [];
     if (!b.streak || typeof b.streak !== 'object') b.streak = blank().streak;
     return b;
   }
@@ -209,6 +209,72 @@
     });
   }
 
+  /* ===== Mantar Pano: Pro / Sınırsız kodu (kristalle alınır, kodu Mantar Pano'da girersin) ===== */
+  function mantarCfg() { return (SCFG && SCFG.mantar && SCFG.mantar.tiers) ? SCFG.mantar : { days: 7, tiers: [] }; }
+  function fmtDate(sec) { try { return new Date(sec * 1000).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) { return ''; } }
+  function passState(p) {
+    if (!p.used) return { text: 'Hazır · henüz kullanılmadı', cls: 'new' };
+    var left = p.exp - Math.floor(Date.now() / 1000);
+    return left > 0 ? { text: 'Aktif · ' + fmtDate(p.exp) + ' tarihine kadar', cls: 'on' } : { text: 'Süresi doldu', cls: 'old' };
+  }
+  function buyPass(tr) {
+    if (S.bal < tr.cost) { render(); return toast('Yetersiz kristal! Günlük giriş yaparak kristal biriktirmeye devam et.'); }
+    if (!confirm(tr.name + ' (' + mantarCfg().days + ' gün) için ' + tr.cost + ' kristal harcanacak. Devam edilsin mi?')) return;
+    api('/pass/buy', { tier: tr.id }).then(function (d) {
+      apply(d); render();
+      if (d.pass) showPass(d.pass, tr);
+    }, function (e) {
+      if (e.data && e.data.s) { apply(e.data); render(); }
+      toast(e.message);
+    });
+  }
+  function showPass(p, tr) {
+    var code = fmtCode(p.c);
+    MKVitrin.open({
+      art: MKVitrin.art.pano(tr ? tr.short : ''), title: 'Kodun hazır',
+      desc: (tr ? tr.name : 'Mantar Pano') + ' kodun: ' + code + '. Mantar Pano\'da Premium kodu alanına yapıştır; ' + p.days + ' günlük süre, kodu ilk kullandığın anda başlar. Kod burada \'Mantar Pano kodlarım\' bölümünde de durur.',
+      chips: ['Kod: ' + code, p.days + ' gün', 'Harcanan: ' + p.cost + ' kristal'],
+      primary: { label: 'Kodu kopyala', cls: 'blue', fn: function () { copy(code, 'Kod kopyalandı: ' + code); } }
+    });
+  }
+  function openPass(tr) {
+    var ok = S.bal >= tr.cost, need = Math.max(0, tr.cost - S.bal), days = mantarCfg().days;
+    MKVitrin.open({
+      art: MKVitrin.art.pano(tr.short), title: tr.name,
+      desc: days + ' günlük ' + tr.short + ' erişimi. Alınca sana bir kod verilir; kodu Mantar Pano\'da gir, süre ilk kullandığın anda başlar. Mantar Pano\'nun şimdiki özellikleri zaten ücretsiz kalır; bu paket yeni özellikleri açar.',
+      chips: ['Fiyat: ' + tr.cost + ' kristal', 'Süre: ' + days + ' gün', 'Bakiyen: ' + S.bal],
+      note: ok ? '' : 'Yetersiz kristal · yaklaşık ' + Math.ceil(need / SCFG.daily) + ' gün daha (seri ödülü hesaba katılmadan).',
+      primary: { label: 'Al', cost: tr.cost, disabled: !ok, fn: function () { setTimeout(function () { buyPass(tr); }, 30); } }
+    });
+  }
+  function renderPass() {
+    var box = $('kPassShelf'); if (!box || !window.MKVitrin) return;
+    box.textContent = '';
+    mantarCfg().tiers.forEach(function (tr, i) {
+      box.appendChild(MKVitrin.card({
+        art: MKVitrin.art.pano(tr.short), delay: i * .5, label: tr.name + ', ' + tr.cost + ' kristal',
+        tag: { kind: 'price', text: String(tr.cost), off: S.bal < tr.cost },
+        onClick: function () { openPass(tr); }
+      }));
+    });
+    var wrap = $('kPassWrap'), list = $('kPassList'); if (!wrap || !list) return;
+    list.textContent = ''; wrap.style.display = S.passes.length ? '' : 'none';
+    S.passes.forEach(function (p) {
+      var tr = mantarCfg().tiers.filter(function (x) { return x.id === p.tier; })[0], st = passState(p), d = document.createElement('div');
+      d.appendChild(document.createTextNode((tr ? tr.short : p.tier) + ' · ' + fmtCode(p.c) + ' · ' + st.text + ' '));
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'k-mini'; b.textContent = 'Kopyala';
+      b.addEventListener('click', function () { copy(fmtCode(p.c), 'Kod kopyalandı: ' + fmtCode(p.c)); });
+      d.appendChild(b); list.appendChild(d);
+    });
+  }
+  function passMake() {
+    var k = adminKey(); if (!k) return;
+    api('/admin/pass', { tier: $('kPassTier').value, days: $('kPassDays').value }, k).then(function (d) {
+      $('kPassOut').textContent = fmtCode(d.code);
+      copy(fmtCode(d.code), 'Mantar kodu üretildi ve kopyalandı: ' + fmtCode(d.code) + ' (' + d.name + ', ' + d.days + ' gün)');
+    }, function (e) { toast(e.message); });
+  }
+
   /* ===== Vitrin: paket penceresi, ücretsiz ödüller, geri sayım ===== */
   function openPack(i) {
     var pk = SCFG.packs[i]; if (!pk) return;
@@ -251,7 +317,7 @@
   /* ===== Ekran ===== */
   function render() {
     if (!$('storePage')) return;
-    if ($('kVer')) $('kVer').textContent = 'kristal.js v9 yüklü (sunucu)';
+    if ($('kVer')) $('kVer').textContent = 'kristal.js v10 yüklü (sunucu)';
     if ($('kOldWrap')) $('kOldWrap').hidden = !oldCreds();
     $('kBal').textContent = S.bal;
     if ($('kBal2')) $('kBal2').textContent = S.bal;
@@ -269,7 +335,7 @@
         onClick: function () { openPack(i); }
       }));
     });
-    renderFree(); tickTimer();
+    renderFree(); renderPass(); tickTimer();
     $('kLow').hidden = S.bal >= Math.min.apply(null, SCFG.packs.map(function (p) { return p.cost; }));
 
     var pr = pendingReq(), pb = $('kPending');
@@ -334,6 +400,7 @@
     if ($('kRestoreOld')) $('kRestoreOld').addEventListener('click', restoreOld);
     $('kGiftAdd').addEventListener('click', giftAdd);
     $('kGiftMake').addEventListener('click', giftMake);
+    if ($('kPassMake')) $('kPassMake').addEventListener('click', passMake);
     $('kVerBtn').addEventListener('click', verify);
     $('kVerDone').addEventListener('click', reqDone);
     $('kCodeUse').addEventListener('click', giftRedeem);

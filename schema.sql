@@ -58,3 +58,18 @@ CREATE TABLE IF NOT EXISTS streak (
   paid   INTEGER NOT NULL DEFAULT 0,      -- bu seride seri ödülü verilen en son gün sayısı
   last   TEXT NOT NULL DEFAULT ''         -- son sayılan gün (Türkiye saati)
 );
+
+-- Mantar Pano geçişleri (Pro / Sınırsız, kristalle alınır; süre kod ilk kullanıldığında başlar; Mantar Pano /api/mantarpano/redeem ile bozdurur). Tekrar çalıştırmak güvenlidir.
+CREATE TABLE IF NOT EXISTS passes (
+  code    TEXT PRIMARY KEY,               -- 13 harflik kod
+  uid     TEXT NOT NULL,                  -- satın alan Site ID ('' = yönetici üretti)
+  tier    TEXT NOT NULL,                  -- pro | unl
+  days    INTEGER NOT NULL,               -- süre (gün)
+  cost    INTEGER NOT NULL DEFAULT 0,
+  t       TEXT NOT NULL,
+  created INTEGER NOT NULL,
+  used_at INTEGER,                        -- ilk kullanım (unix sn); NULL = henüz kullanılmadı
+  exp     INTEGER NOT NULL DEFAULT 0,     -- bitiş (unix sn), ilk kullanımda yazılır
+  devs    TEXT NOT NULL DEFAULT ''        -- bağlı cihaz kimlikleri (virgülle), en fazla CFG.mantar.maxDevices
+);
+CREATE INDEX IF NOT EXISTS passes_uid ON passes(uid, created);

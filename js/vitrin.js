@@ -40,6 +40,13 @@
       return '<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><rect x="8" y="26" width="48" height="30" rx="4" fill="#e8344a" stroke="#6b1020" stroke-width="3"/><rect x="5" y="19" width="54" height="12" rx="4" fill="#ff5a6c" stroke="#6b1020" stroke-width="3"/><rect x="28" y="19" width="8" height="37" fill="#ffd34d" stroke="#8a5a08" stroke-width="2"/>' +
         '<path d="M32 19c-4-10-16-9-14-3s10 4 14 3zM32 19c4-10 16-9 14-3s-10 4-14 3z" fill="#ffd34d" stroke="#8a5a08" stroke-width="2.4" stroke-linejoin="round"/></svg>';
     },
+    pano: function (label) {   // mantar pano: ahşap çerçeve, mantar yüzey, raptiyeli kâğıt ve kırmızı ip; alt rozet Pro / Sınırsız
+      var t = String(label == null ? '' : label).replace(/[^\w\u00c0-\u024f ]/g, '').slice(0, 9);
+      return '<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><rect x="5" y="8" width="54" height="42" rx="5" fill="#c98a4b" stroke="#5a3410" stroke-width="2.6"/><rect x="10" y="13" width="44" height="32" rx="2" fill="#e0b070" stroke="#8a5a20" stroke-width="1.6"/>' +
+        '<rect x="14" y="17" width="16" height="13" fill="#fffdf2" stroke="#6b3a08" stroke-width="1.6" transform="rotate(-5 22 23)"/><rect x="34" y="21" width="15" height="17" fill="#fff4a8" stroke="#6b3a08" stroke-width="1.6" transform="rotate(4 41 29)"/>' +
+        '<path d="M22 20Q32 34 41 24" fill="none" stroke="#e8344a" stroke-width="1.8" stroke-linecap="round"/><circle cx="22" cy="20" r="2.4" fill="#e8344a" stroke="#6b1020" stroke-width="1"/><circle cx="41" cy="24" r="2.4" fill="#e8344a" stroke="#6b1020" stroke-width="1"/>' +
+        (t ? '<rect x="10" y="44" width="44" height="16" rx="8" fill="#7c3aed" stroke="#2e1065" stroke-width="2.2"/><text x="32" y="56" text-anchor="middle" font-family="Bebas Neue,Oswald,Impact,sans-serif" font-size="13" fill="#fff">' + t + '</text>' : '') + '</svg>';
+    },
     sack: function () {
       return '<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><path d="M22 10l6 7h8l6-7z" fill="#c98a3a" stroke="#6b3a08" stroke-width="2.4" stroke-linejoin="round"/><path d="M27 17c-12 6-19 18-19 31 0 7 6 11 24 11s24-4 24-11c0-13-7-25-19-31z" fill="#e0a850" stroke="#6b3a08" stroke-width="3" stroke-linejoin="round"/><path d="M26 18h12" stroke="#6b3a08" stroke-width="4" stroke-linecap="round"/>' +
         '<g transform="translate(17 28) scale(.62)"><path d="M13 7h22l9 12-20 24L4 19z" fill="#2fa8f0" stroke="#0e4a8a" stroke-width="3"/><path d="M13 7h22l9 12H4z" fill="#a8e8ff" stroke="#0e4a8a" stroke-width="2"/></g></svg>';

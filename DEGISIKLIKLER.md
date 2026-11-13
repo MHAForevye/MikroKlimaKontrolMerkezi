@@ -1,3 +1,26 @@
+# Bu sürümde değişenler (Mantar Pano Pro / Sınırsız kodları)
+
+## Mağaza: Mantar Pano
+- Mağazaya **Mantar Pano** rafı eklendi: **Pro 120 kristal**, **Sınırsız 250 kristal**, ikisi de **7 gün**. Satın alınca 13 harflik tek kod verilir ve "Mantar Pano kodlarım" bölümünde durur (durum: hazır / aktif + bitiş tarihi / süresi doldu, kopyala düğmesi).
+- Astrophoto Cam paketleri, hediye kodu, seri ve alev sistemi **aynen duruyor**.
+- Yönetici bölümüne **Mantar kodu üret** eklendi (ücretsiz kod: paket + gün sayısı). Test ve hediye için.
+
+## Sunucu (`worker/index.js`, `schema.sql`)
+- Yeni tablo `passes` (kod, paket, gün, ilk kullanım, bitiş, bağlı cihazlar). `schema.sql` tekrar çalıştırılabilir (`IF NOT EXISTS`).
+- `POST /api/pass/buy` (hesaplı): kristal atomik düşer, kod üretilir; yazılamazsa kristal iade edilir. Hız sınırı: 10 dakikada 10 istek.
+- `POST /api/mantarpano/redeem` ve `/api/mantarpano/verify` (hesapsız, CORS açık): Mantar Pano'nun `BAGLANTI.md` sözleşmesiyle birebir. İlk kullanımda 7 gün başlar ve kod cihaza bağlanır; en fazla **2 cihaz** (telefon + bilgisayar), aynı cihaz aynı bitişi alır. `verify` süre başlatmaz. Yanıt: `{ok, app, plan: pro|unlimited, expiresAt(ms), token?}`; hata: `invalid_code | used | expired | wrong_app | rate_limited`.
+- Hız sınırı: IP başına 10 dakikada 40 bozdurma, 300 yenileme kontrolü (yenileme sınırı aşılırsa 503 döner; Mantar Pano 5xx'i ağ sorunu sayar, premium kapanmaz).
+- İsteğe bağlı **imzalı jeton** (ECDSA P-256): `MP_SIGN_KEY` gizli anahtarı tanımlıysa yanıta `token` eklenir. Anahtar çifti: `node worker/gen-mp-key.mjs`.
+- İsteğe bağlı `MP_ORIGIN` değişkeni: CORS'u sadece Mantar Pano adresine kısıtlar (boşsa `*`).
+- `POST /api/admin/pass`: yönetici kodu.
+- `state` cevabına `passes` (son 20 kod) ve `cfg.mantar` eklendi.
+
+## Diğer
+- `js/kristal.js` v10, `js/vitrin.js` (yeni `art.pano` resmi), `index.html`, `sw.js` sürümleri güncellendi. `gizlilik.html` Mantar Pano kodlarını anlatıyor.
+- Testler: 9 yeni test (satın alma, süre başlangıcı, cihaz sınırı, hatalar, verify, CORS, imza, hız sınırı, yönetici kodu).
+
+---
+
 # Bu sürümde değişenler (tasarım turu)
 
 ## Alev daha büyüleyici
