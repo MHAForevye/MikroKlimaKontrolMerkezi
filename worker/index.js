@@ -405,7 +405,8 @@ async function route(req, env) {
 
 export default {
   async fetch(req, env) {
-    try { return await route(req, env); }
-    catch (e) { console.error(e && e.stack || e); return fail('Sunucu hatası.', 500); }
+    if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsOf(env) });
+    try { return withCors(await route(req, env), env); }
+    catch (e) { console.error(e && e.stack || e); return withCors(fail('Sunucu hatası.', 500), env); }
   }
 };
