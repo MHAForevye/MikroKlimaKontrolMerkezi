@@ -17,7 +17,7 @@ database_id = "a4576ecf-eead-4f1a-9cbf-ae0f6f79ccc6"   # npx wrangler d1 create 
 # Mağaza ayrı sitede (forevye-market reposu). Hesaplı uçlara sadece bu adres(ler) erişebilir; virgülle ayır, sadece alan adı, sonunda / yok.
 # Panelden de verilebilir: Workers > mikroklimakontrolmerkezi > Settings > Variables.  Boşsa hesaplı uçlar kapalı kalır.
 [vars]
-MARKET_ORIGIN = "https://frovye.github.io"
+MARKET_ORIGIN = "https://mhaforevye.github.io"
 
 # Zamanlayıcı uygulamasının adresi (isteğe bağlı, sadece alan adı; boşsa * ): ZP_ORIGIN = "https://KULLANICI.github.io"
 # İmzalı jeton için: npx wrangler secret put ZP_SIGN_KEY   (ayrıntı: ZAMANLAYICI-BAGLANTI.md)
