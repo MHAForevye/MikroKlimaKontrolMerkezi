@@ -1530,7 +1530,7 @@ const ACT = {
   setMetric: a => setMetric(a),
   pickLoc: a => pickLoc(+a),
   setSkin: a => setSkin(a, true),
-  openStore: () => { if (window.MKKristal) MKKristal.openStore(); },
+  openStore: () => { if (window.MKMagaza) MKMagaza.open(); },
   kartOpen: () => { if (window.MKKart) MKKart.open(); }
 };
 document.addEventListener('click', e => {

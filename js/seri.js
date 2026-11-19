@@ -1,5 +1,5 @@
 /* Seri ateşi: uygulamayı üst üste kaç gün açtığını sayar ve Karne sekmesinde 12 kademeli alevle gösterir.
-   Alev 7, 14, 21... günde renk ve şekil değiştirir (core.js: SERI_TIERS, seriTier). Mağaza'da "Alev koleksiyonu" rafı vardır.
+   Alev 7, 14, 21... günde renk ve şekil değiştirir (core.js: SERI_TIERS, seriTier). Alev koleksiyonu Mağaza sitesinde.
    Sayının kaynağı: kristal sunucusu (7 günde bir +60 kristal oradan verilir). Sunucuya ulaşılamazsa yerel sayım (localStorage 'mk_seri') gösterilir.
    Bilerek baskısız: "seri bozuldu" dili, uyarı ya da pencere yok; tek gün kaçırılırsa kalkan sessizce seriyi korur. */
 (function () {
@@ -80,7 +80,7 @@
     return { n: n, best: best, last: last, shield: shield, src: src, bonus: cfg && cfg.streak ? cfg.streak.bonus : 60, every: cfg && cfg.streak ? cfg.streak.every : 7, ev: st ? st.ev : 'up' };
   }
   function prefGet() { var v; try { v = localStorage.getItem(PREF); } catch (e) {} return /^(\d|1[01])$/.test(v || '') ? +v : 'auto'; }
-  function prefSet(v) { try { localStorage.setItem(PREF, String(v)); } catch (e) {} paint(); renderShelf(); }
+  function prefSet(v) { try { localStorage.setItem(PREF, String(v)); } catch (e) {} paint(); }
   function shownTier(i) {
     i = i || info(); var top = seriTier(i.best), want = prefGet();
     return want !== 'auto' && want <= top ? want : seriTier(i.n);
@@ -116,41 +116,14 @@
     if (changed) { $('seriBig').classList.remove('pop'); void $('seriBig').offsetWidth; $('seriBig').classList.add('pop'); }
   }
 
-  /* ===== Mağaza: Alev koleksiyonu rafı ===== */
-  function renderShelf() {
-    var box = $('flameShelf'); if (!box || !window.MKVitrin) return;
-    var i = info(), top = seriTier(i.best), sel = shownTier(i), V = MKVitrin;
-    box.textContent = '';
-    for (var t = 0; t < 12; t++) (function (t) {
-      var open = t <= top, day = seriTierDay(t), nm = SERI_TIERS[t].name;
-      box.appendChild(V.card({
-        art: flame(t), cap: '', cls: (open ? '' : 'locked ') + (t === sel ? 'sel' : ''), delay: (t % 6) * .35,
-        label: nm + (open ? (t === sel ? ', seçili' : ', açık') : ', ' + day + '. günde açılır'),
-        badge: open ? '' : 'lock',
-        tag: open ? { kind: 'ok', text: t === sel ? 'Seçili' : 'Açık', sm: true } : { kind: 'lock', text: day + '. gün', sm: true },
-        onClick: function () {
-          var cur = shownTier(info()), auto = prefGet() === 'auto';
-          V.open({
-            art: flame(t), title: nm, desc: SERI_TIERS[t].info,
-            chips: ['Açılış: ' + day + '. gün', 'En uzun serin: ' + info().best + ' gün'].concat(open ? [t === cur ? (auto ? 'Şu an otomatik' : 'Şu an seçili') : 'Açık'] : []),
-            note: open ? '' : 'Bu alev, seri ' + day + ' güne ulaşınca açılır. ' + Math.max(0, day - info().n) + ' gün kaldı.',
-            primary: open ? (t === cur && !auto ? { label: 'Otomatik yap', cls: 'blue', fn: function () { prefSet('auto'); } } : { label: 'Kullan', fn: function () { prefSet(t); } }) : { label: 'Kilitli', disabled: true }
-          });
-        }
-      }));
-    })(t);
-  }
-
   function init() {
-    tick(); paint(); renderShelf();
-    document.addEventListener('mk:state', function () { paint(); renderShelf(); });
-    var s = $('btnStore');
-    if (s) s.addEventListener('click', function () { renderShelf(); });
+    tick(); paint();
+    document.addEventListener('mk:state', paint);
     document.addEventListener('visibilitychange', function () {   // sekme gece yarısından sonra tekrar açılırsa yeni gün say
       if (document.visibilityState === 'visible') { tick(); paint(); }
     });
   }
 
-  window.MKSeri = { flame: flame, info: info, shownTier: shownTier, paint: paint, renderShelf: renderShelf, localHint: function () { return st ? { n: st.n, best: st.best, last: st.last } : null; }, tierName: function (t) { return SERI_TIERS[t].name; } };
+  window.MKSeri = { flame: flame, info: info, shownTier: shownTier, paint: paint, localHint: function () { return st ? { n: st.n, best: st.best, last: st.last } : null; }, tierName: function (t) { return SERI_TIERS[t].name; } };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
