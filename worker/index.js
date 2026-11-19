@@ -19,6 +19,18 @@ const CFG = {
       { id: 'unl', name: 'Mantar Pano Sınırsız', short: 'Sınırsız', cost: 250 }
     ]
   },
+  // Zamanlayıcı geçişleri: Plus / Premium, 3 ya da 7 gün. Fiyatlar BURADA ve sadece burada belirlenir; tarayıcının gönderdiği tutar hiç kullanılmaz.
+  zaman: {
+    maxDevices: 2,          // bir kod en fazla kaç cihaza bağlanır
+    tiers: [
+      { id: 'plus', name: 'Zamanlayıcı Plus', short: 'Plus' },
+      { id: 'premium', name: 'Zamanlayıcı Premium', short: 'Premium' }
+    ],
+    plans: [
+      { tier: 'plus', days: 3, cost: 100 }, { tier: 'plus', days: 7, cost: 200 },
+      { tier: 'premium', days: 3, cost: 250 }, { tier: 'premium', days: 7, cost: 500 }
+    ]
+  },
   maxNewPerIp: 20,        // aynı IP'den günde en fazla kaç yeni hesap (operatörler tek IP'yi yüzlerce kişiyle paylaşır, o yüzden cömert)
   adminFailPer10m: 30,    // aynı IP'den 10 dakikada en fazla kaç yanlış yönetici anahtarı denemesi
   redeemPer10m: 20,       // bir hesabın 10 dakikada en fazla kaç kod denemesi
@@ -27,7 +39,10 @@ const CFG = {
   passVerPer10m: 300      // aynı IP'den 10 dakikada en fazla kaç Mantar Pano yenileme kontrolü (ortak ağlar için geniş)
 };
 
-const AB = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // 0/O ve 1/I karışmasın
+const AB = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+/* Zamanlayıcı: 7 günlük paket, 3 günlük fiyatla günlük hesaplanınca yüzde kaç ucuz (sunucu hesaplar, ekran bunu gösterir) */
+const zPlan = (tier, days) => CFG.zaman.plans.find(p => p.tier === tier && p.days === days) || null;
+const zSave7 = () => { const o = {}; CFG.zaman.tiers.forEach(t => { const a = zPlan(t.id, 3), b = zPlan(t.id, 7); o[t.id] = a && b ? Math.round((1 - b.cost / (a.cost * 7 / 3)) * 100) : 0; }); return o; };   // 0/O ve 1/I karışmasın
 const te = new TextEncoder();
 
 /* ===== Yardımcılar ===== */
@@ -109,9 +124,10 @@ async function state(env, id, extra) {
   const codes = (await env.DB.prepare('SELECT code AS c, n, t FROM codes WHERE to_id=? AND used_at IS NOT NULL ORDER BY used_at DESC LIMIT 30').bind(id).all()).results || [];
   const sk = await env.DB.prepare('SELECT n,best,shield,paid,last FROM streak WHERE uid=?').bind(id).first();
   const passes = (await env.DB.prepare('SELECT code AS c, tier, days, cost, t, used_at AS used, exp FROM passes WHERE uid=? ORDER BY created DESC LIMIT 20').bind(id).all()).results || [];
+  const zpasses = (await env.DB.prepare('SELECT code AS c, tier, days, cost, t, used_at AS used, exp FROM zpasses WHERE uid=? ORDER BY created DESC LIMIT 20').bind(id).all()).results || [];
   return Object.assign({
-    ok: 1, s: Object.assign({}, u, { reqs: reqs.reverse(), codes, passes, streak: sk || { n: 0, best: 0, shield: 0, paid: 0, last: '' } }),
-    cfg: { daily: CFG.daily, packs: CFG.packs, streak: { every: CFG.streakEvery, bonus: CFG.streakBonus }, mantar: { days: CFG.mantar.days, tiers: CFG.mantar.tiers } }, today: today(), now: nowSec()
+    ok: 1, s: Object.assign({}, u, { reqs: reqs.reverse(), codes, passes, zpasses, streak: sk || { n: 0, best: 0, shield: 0, paid: 0, last: '' } }),
+    cfg: { daily: CFG.daily, packs: CFG.packs, streak: { every: CFG.streakEvery, bonus: CFG.streakBonus }, mantar: { days: CFG.mantar.days, tiers: CFG.mantar.tiers }, zaman: { tiers: CFG.zaman.tiers, plans: CFG.zaman.plans, save7: zSave7() } }, today: today(), now: nowSec()
   }, extra || {});
 }
 async function addLog(env, uid, kind, delta, ref) {
@@ -262,52 +278,111 @@ async function passBuy(req, env, u, b) {
    POST /api/mantarpano/verify  aynı gövde → süre başlatmaz/cihaz bağlamaz, sadece "hâlâ geçerli mi" der (iptal/yenileme)
    Başarı: {ok:true, app, plan:'pro'|'unlimited', expiresAt: ms, token?}   Hata: {ok:false, error:'invalid_code'|'used'|'expired'|'wrong_app'|'rate_limited'}
    Hesapsız uç: Mantar Pano başka alan adından çağırır → CORS (MP_ORIGIN ayarlıysa sadece o adres, yoksa *). Kodun kendisi anahtardır. */
-const corsOf = env => ({ 'Access-Control-Allow-Origin': env.MP_ORIGIN || '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-MK-Admin', 'Access-Control-Max-Age': '86400', 'Vary': 'Origin' });
-const withCors = (r, env) => { Object.entries(corsOf(env)).forEach(([k, v]) => r.headers.set(k, v)); return r; };
-const planOut = id => id === 'unl' ? 'unlimited' : 'pro';
+/* Açık uçlar (hesapsız, kodun kendisi anahtar): her uygulamanın kendi tablosu, adı, izin verilen adresi ve imza anahtarı var. */
+const APPS = {
+  mp: { app: 'mantarpano', label: 'Mantar Pano', table: 'passes', rl: ['pact', 'pver'], plan: id => id === 'unl' ? 'unlimited' : 'pro', origin: 'MP_ORIGIN', key: 'MP_SIGN_KEY', maxDev: () => CFG.mantar.maxDevices },
+  zp: { app: 'zamanlayici', label: 'Zamanlayıcı', table: 'zpasses', rl: ['zact', 'zver'], plan: id => id, origin: 'ZP_ORIGIN', key: 'ZP_SIGN_KEY', maxDev: () => CFG.zaman.maxDevices }
+};
+const OPEN = { '/api/mantarpano/redeem': APPS.mp, '/api/mantarpano/verify': APPS.mp, '/api/zamanlayici/redeem': APPS.zp, '/api/zamanlayici/verify': APPS.zp };
+const openOf = path => OPEN[path] || null;
+/* İzin verilen adres: tek değer ya da virgülle liste (sadece alan adı). Boşsa *. Listede istekteki adres varsa o, yoksa ilki. */
+function pickOrigin(val, reqOrigin) {
+  const l = String(val || '').split(',').map(x => x.trim().replace(/\/+$/, '')).filter(Boolean);
+  if (!l.length) return '*';
+  return l.length > 1 && l.includes(reqOrigin) ? reqOrigin : l[0];
+}
+const corsOf = (env, spec, reqOrigin) => ({ 'Access-Control-Allow-Origin': pickOrigin(spec && env[spec.origin], reqOrigin), 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-MK-Admin', 'Access-Control-Max-Age': '86400', 'Vary': 'Origin' });
+const withCors = (r, h) => { Object.entries(h).forEach(([k, v]) => r.headers.set(k, v)); return r; };
+
+/* Mağaza ayrı bir sitede (başka alan adı). Hesaplı uçlar (init, sync, buy, redeem, admin...) yalnızca env.MARKET_ORIGIN listesindeki
+   adreslerden okunabilir: virgülle ayrılmış, sadece alan adı (https://KULLANICI.github.io). Boşsa hesaplı uçlar eskisi gibi kapalı kalır.
+   Kimlik başlıkla (Authorization) gider, çerez yok; bu yüzden izin verilen adres dışında kimse yanıtı okuyamaz. */
+const marketOrigins = env => String(env.MARKET_ORIGIN || '').split(',').map(x => x.trim().replace(/\/+$/, '')).filter(Boolean);
+function corsHeaders(req, env, spec) {
+  const o = req.headers.get('Origin') || '';
+  if (spec) return corsOf(env, spec, o);
+  return o && marketOrigins(env).includes(o) ? Object.assign({}, corsOf(env, null, o), { 'Access-Control-Allow-Origin': o }) : null;
+}
 const mpFail = (error, status, message) => json({ ok: false, error, message }, status);
 
-/* İsteğe bağlı imza (ECDSA P-256): env.MP_SIGN_KEY = özel anahtar JWK (wrangler secret). Yoksa token eklenmez. Açık anahtar Mantar Pano config.js → PUBLIC_KEY. */
-async function mpToken(env, row, device) {
-  if (!env.MP_SIGN_KEY) return null;
+/* İsteğe bağlı imza (ECDSA P-256): her uygulamanın kendi anahtarı (MP_SIGN_KEY / ZP_SIGN_KEY, wrangler secret). Yoksa token eklenmez.
+   Yük içinde uygulama adı da imzalıdır: bir uygulamanın jetonu ötekinde geçmez. */
+async function mpToken(env, row, device, spec) {
+  const raw = env[spec.key];
+  if (!raw) return null;
   try {
-    const jwk = typeof env.MP_SIGN_KEY === 'string' ? JSON.parse(env.MP_SIGN_KEY) : env.MP_SIGN_KEY;
+    const jwk = typeof raw === 'string' ? JSON.parse(raw) : raw;
     const key = await crypto.subtle.importKey('jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
     const enc = new TextEncoder();
-    const p = b64url(enc.encode(JSON.stringify({ app: 'mantarpano', plan: planOut(row.tier), exp: row.exp * 1000, dev: device })));
+    const p = b64url(enc.encode(JSON.stringify({ app: spec.app, plan: spec.plan(row.tier), exp: row.exp * 1000, dev: device })));
     const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, enc.encode(p));
     return p + '.' + b64url(new Uint8Array(sig));
   } catch (e) { return null; }
 }
 
-async function mantarRedeem(req, env, b, verify) {
-  const ip = req.headers.get('CF-Connecting-IP') || 'x', name = verify ? 'pver' : 'pact', max = verify ? CFG.passVerPer10m : CFG.passActPer10m;
+async function mantarRedeem(req, env, b, verify, spec) {
+  spec = spec || APPS.mp;
+  const ip = req.headers.get('CF-Connecting-IP') || 'x', name = spec.rl[verify ? 1 : 0], max = verify ? CFG.passVerPer10m : CFG.passActPer10m;
   await rlBump(env, name, ip);
   // yenileme kontrolünde sınır aşımı 503 döner: istemci 5xx'i "ağ sorunu" sayar ve premium'u kapatmaz
   if ((await rlCount(env, name, ip)) > max) return mpFail('rate_limited', verify ? 503 : 429, 'Çok fazla deneme. Birkaç dakika sonra tekrar dene.');
-  if (b.app !== 'mantarpano') return mpFail('wrong_app', 400, 'Bu kod Mantar Pano için değil.');
+  if (b.app !== spec.app) return mpFail('wrong_app', 400, 'Bu kod ' + spec.label + ' için değil.');
   const device = String(b.device || ''), c = normCode(b.code);
   if (!/^[A-Za-z0-9_.-]{4,64}$/.test(device) || !/^[A-Z2-9]{13}$/.test(c)) return mpFail('invalid_code', 400, 'Kod geçersiz. Yazımı kontrol et.');
-  const SEL = 'SELECT code,tier,days,used_at,exp,devs FROM passes WHERE code=?';
+  const T = spec.table;   // sabit tablo adı (APPS'ten), kullanıcı girdisi değil
+  const SEL = 'SELECT code,tier,days,used_at,exp,devs FROM ' + T + ' WHERE code=?';
   let row = await env.DB.prepare(SEL).bind(c).first();
   if (!row) return mpFail('invalid_code', 404, 'Kod geçersiz. Yazımı kontrol et.');
   const now = nowSec();
   if (!row.used_at) {
     if (verify) return mpFail('invalid_code', 404, 'Bu kod henüz etkinleştirilmemiş.');
     // ilk kullanım: süre şimdi başlar, kod bu cihaza bağlanır (tek atomik komut; iki cihaz aynı anda denerse biri kazanır)
-    await env.DB.prepare('UPDATE passes SET used_at=?, exp=?, devs=? WHERE code=? AND used_at IS NULL').bind(now, now + row.days * 86400, device, c).run();
+    await env.DB.prepare('UPDATE ' + T + ' SET used_at=?, exp=?, devs=? WHERE code=? AND used_at IS NULL').bind(now, now + row.days * 86400, device, c).run();
     row = await env.DB.prepare(SEL).bind(c).first();
   }
   const devs = row.devs ? row.devs.split(',') : [];
   if (row.exp <= now) return mpFail('expired', 410, 'Kodun süresi dolmuş.');
   if (!devs.includes(device)) {
-    if (verify || devs.length >= CFG.mantar.maxDevices) return mpFail('used', 409, 'Bu kod başka bir cihazda kullanılmış.');
+    if (verify || devs.length >= spec.maxDev()) return mpFail('used', 409, 'Bu kod başka bir cihazda kullanılmış.');
     devs.push(device);
-    await env.DB.prepare('UPDATE passes SET devs=? WHERE code=?').bind(devs.join(','), c).run();
+    await env.DB.prepare('UPDATE ' + T + ' SET devs=? WHERE code=?').bind(devs.join(','), c).run();
   }
-  const out = { ok: true, app: 'mantarpano', plan: planOut(row.tier), expiresAt: row.exp * 1000 }, tok = await mpToken(env, row, device);
+  const out = { ok: true, app: spec.app, plan: spec.plan(row.tier), expiresAt: row.exp * 1000 }, tok = await mpToken(env, row, device, spec);
   if (tok) out.token = tok;
   return json(out);
+}
+
+/* ===== Zamanlayıcı: satın alma (Mağaza'dan, hesapla). Kod kristalle alınır; fiyat ve süre sadece CFG.zaman'dan okunur. ===== */
+async function zBuy(req, env, u, b) {
+  await rlBump(env, 'zbuy', u.id);
+  if ((await rlCount(env, 'zbuy', u.id)) > CFG.buyPer10m) return tooMany();
+  const pl = /^\d{1,3}$/.test(String(b.days)) ? zPlan(String(b.tier || ''), Number(b.days)) : null;   // 3 ya da 7; "3.5", "3; x" gibi değerler geçmez
+  if (!pl) return fail('Geçersiz paket.');
+  const code = rndStr(13, AB), t = stamp();
+  const up = await env.DB.prepare('UPDATE users SET bal=bal-?, spent=spent+? WHERE id=? AND bal>=?').bind(pl.cost, pl.cost, u.id, pl.cost).run();
+  if (!up.meta.changes) return fail('Yetersiz kristal! Günlük giriş yaparak kristal biriktirmeye devam et.', 400, await state(env, u.id));
+  try {
+    await env.DB.batch([
+      env.DB.prepare('INSERT INTO zpasses(code,uid,tier,days,cost,t,created) VALUES(?,?,?,?,?,?,?)').bind(code, u.id, pl.tier, pl.days, pl.cost, t, nowSec()),
+      env.DB.prepare('INSERT INTO log(uid,kind,delta,ref,t) VALUES(?,?,?,?,?)').bind(u.id, 'zpass', -pl.cost, pl.tier + ':' + pl.days + ':' + code, t)
+    ]);
+  } catch (e) {   // kod yazılamadıysa kristali iade et
+    await env.DB.prepare('UPDATE users SET bal=bal+?, spent=spent-? WHERE id=?').bind(pl.cost, pl.cost, u.id).run();
+    return fail('Kod oluşturulamadı, kristalin iade edildi. Tekrar dene.', 500);
+  }
+  return json(await state(env, u.id, { zpass: { c: code, tier: pl.tier, days: pl.days, cost: pl.cost, t } }));
+}
+async function adminZPass(env, b) {
+  const tr = CFG.zaman.tiers.find(t => t.id === String(b.tier || '')), days = toInt(b.days == null || b.days === '' ? 7 : b.days, 1, 365);
+  if (!tr) return fail('Paket: plus ya da premium olmalı.');
+  if (days === null) return fail('Gün sayısı 1 ile 365 arasında olmalı.');
+  const code = rndStr(13, AB);
+  await env.DB.prepare("INSERT INTO zpasses(code,uid,tier,days,cost,t,created) VALUES(?,?,?,?,0,?,?)").bind(code, '', tr.id, days, stamp(), nowSec()).run();
+  return json({ ok: 1, code, tier: tr.id, name: tr.name, days });
+}
+async function adminZPasses(env) {
+  const rows = (await env.DB.prepare("SELECT code AS c, tier, days, t, used_at AS used, exp FROM zpasses WHERE uid='' ORDER BY created DESC LIMIT 30").all()).results || [];
+  return json({ ok: 1, passes: rows });
 }
 
 async function adminPass(env, b) {
@@ -375,12 +450,15 @@ async function adminDone(env, b) {
 /* ===== Yönlendirme ===== */
 async function route(req, env) {
   const path = new URL(req.url).pathname.replace(/\/+$/, '');
-  const open = path === '/api/mantarpano/redeem' || path === '/api/mantarpano/verify';   // Mantar Pano'dan, başka alan adından çağrılır
-  if (open && req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsOf(env) });
+  const open = openOf(path);   // Mantar Pano / Zamanlayıcı'dan, başka alan adından çağrılır
+  if (req.method === 'OPTIONS' && path.startsWith('/api/')) {
+    const ch = corsHeaders(req, env, open);
+    if (ch) return new Response(null, { status: 204, headers: ch });
+  }
   if (req.method !== 'POST') return fail('Sadece POST.', 405);
   const b = await body(req);
   if (b === null) return fail('İstek çok büyük.', 413);
-  if (open) return withCors(await mantarRedeem(req, env, b, path === '/api/mantarpano/verify'), env);
+  if (open) return mantarRedeem(req, env, b, path.endsWith('/verify'), open);
 
   if (path === '/api/init') return init(req, env);
   if (path.startsWith('/api/admin/')) {
@@ -394,6 +472,8 @@ async function route(req, env) {
       case '/api/admin/done': return adminDone(env, b);
       case '/api/admin/pass': return adminPass(env, b);
       case '/api/admin/passes': return adminPasses(env);
+      case '/api/admin/zpass': return adminZPass(env, b);
+      case '/api/admin/zpasses': return adminZPasses(env);
     }
     return fail('Bulunamadı.', 404);
   }
@@ -403,24 +483,26 @@ async function route(req, env) {
     case '/api/sync': return sync(req, env, u, b);
     case '/api/buy': return buy(req, env, u, b);
     case '/api/pass/buy': return passBuy(req, env, u, b);
+    case '/api/zpass/buy': return zBuy(req, env, u, b);
     case '/api/redeem': return redeem(req, env, u, b);
     case '/api/mail-done': return mailDone(req, env, u);
   }
   return fail('Bulunamadı.', 404);
 }
 
-// CORS yalnızca Mantar Pano'nun çağırdığı iki açık uçta var; hesaplı uçlar (sync, buy, admin...) başka alan adına açılmaz
-const isOpen = req => { const p = new URL(req.url).pathname.replace(/\/+$/, ''); return p === '/api/mantarpano/redeem' || p === '/api/mantarpano/verify'; };
+// CORS: açık uçlar (Mantar Pano: MP_ORIGIN, Zamanlayıcı: ZP_ORIGIN, ikisi de boşsa *) ve Mağaza sitesi (MARKET_ORIGIN); her yanıta (hatalar dahil) eklenir
+const isOpen = req => openOf(new URL(req.url).pathname.replace(/\/+$/, ''));
 
 export default {
   async fetch(req, env) {
+    const ch = corsHeaders(req, env, isOpen(req));
     try {
       const r = await route(req, env);
-      return isOpen(req) ? withCors(r, env) : r;
+      return ch ? withCors(r, ch) : r;
     } catch (e) {
       console.error(e && e.stack || e);
       const r = fail('Sunucu hatası.', 500);
-      return isOpen(req) ? withCors(r, env) : r;
+      return ch ? withCors(r, ch) : r;
     }
   }
 };

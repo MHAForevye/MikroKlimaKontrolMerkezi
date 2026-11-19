@@ -73,3 +73,18 @@ CREATE TABLE IF NOT EXISTS passes (
   devs    TEXT NOT NULL DEFAULT ''        -- bağlı cihaz kimlikleri (virgülle), en fazla CFG.mantar.maxDevices
 );
 CREATE INDEX IF NOT EXISTS passes_uid ON passes(uid, created);
+
+-- Zamanlayıcı geçişleri (Plus / Premium, 3 ya da 7 gün; kristalle alınır, kod ilk kullanıldığında süre başlar). Mantar Pano tablosundan ayrı. Tekrar çalıştırmak güvenlidir.
+CREATE TABLE IF NOT EXISTS zpasses (
+  code    TEXT PRIMARY KEY,               -- 13 harflik kod
+  uid     TEXT NOT NULL,                  -- satın alan Site ID ('' = yönetici üretti)
+  tier    TEXT NOT NULL,                  -- plus | premium
+  days    INTEGER NOT NULL,               -- süre (gün)
+  cost    INTEGER NOT NULL DEFAULT 0,
+  t       TEXT NOT NULL,
+  created INTEGER NOT NULL,
+  used_at INTEGER,                        -- ilk kullanım (unix sn); NULL = henüz kullanılmadı
+  exp     INTEGER NOT NULL DEFAULT 0,     -- bitiş (unix sn), ilk kullanımda yazılır
+  devs    TEXT NOT NULL DEFAULT ''        -- bağlı cihaz kimlikleri (virgülle), en fazla CFG.zaman.maxDevices
+);
+CREATE INDEX IF NOT EXISTS zpasses_uid ON zpasses(uid, created);

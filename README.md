@@ -90,7 +90,7 @@ Kendi indeksim olduğu için resmî bir uyarının yerini tutmaz, can ve mal gü
 - Ana ekrana eklenebilir (PWA), çevrimdışı çalışır
 - Sık sorulan sorular ve gizlilik sayfası
 - Seri ateşi: 12 kademeli alev (7, 14, 21... günde değişir), her 7. günde +60 kristal (seriyi sunucu hesaplar)
-- Kristal ödül sistemi (isteğe bağlı): günlük giriş ödülü, Mağaza (Astrophoto Cam paketleri ve Mantar Pano Pro/Sınırsız haftalık kodları) ve hediye kodu. Hava verisinden bağımsızdır, küçük bir Cloudflare Worker + D1 sunucusunda çalışır.
+- Kristal ödül sistemi (isteğe bağlı): günlük giriş ödülü, Mağaza (Astrophoto Cam paketleri ve Mantar Pano Pro/Sınırsız haftalık kodları) ve hediye kodu. Hava verisinden bağımsızdır, küçük bir Cloudflare Worker + D1 sunucusunda çalışır. **Mağaza ayrı bir sitede ve ayrı repoda (forevye-market)**; bu repo sunucuyu (`worker/`, `schema.sql`), günlük ödül için arayüzsüz kristal bağlantısını (`js/kristal.js`) ve Mağaza'ya giden bağlantıyı (`js/magaza.js`) tutar.
 
 ## <img src="docs/h-08.svg" alt="Neler yok">
 

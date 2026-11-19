@@ -1,3 +1,29 @@
+# Bu sürümde değişenler (Mağaza ayrı repoya taşındı)
+
+## Mağaza artık bu repoda değil
+- Mağaza sayfası, kristal ekranı, alev koleksiyonu, hediye kodu ve yönetici bölümü **forevye-market** reposuna taşındı (statik site). Bu repoda `js/kristal.js` ve `#storePage` yok.
+- Ayarlar > **Mağazayı aç** artık Mağaza sitesini yeni sekmede açar (`js/magaza.js`, adres: `MARKET_URL`). Bu tarayıcıda eski bir kristal hesabı varsa adrese `#hesap=ID.ANAHTAR` eklenir; Mağaza hesabı bir kez yükler ve adres çubuğundan siler (`#` sonrası sunucuya gitmez).
+- Yedek metni `kr` (hesap anahtarı) taşır; Mağaza bu yedeği de okur.
+- **Günlük ödül ve seri aynen hava uygulamasında işlenir.** `js/kristal.js` artık arayüzsüz: uygulama açılınca sunucuya `sync` gider, ödül aynı hesaba yazılır; kristal Mağaza'da harcanır. Mağaza ve hava uygulaması aynı hesabı kullanır (hesap `#hesap=ID.ANAHTAR` bağlantısıyla iki yönde taşınır, `js/hesap.js`). Farklı hesaplar açılmışsa karşı taraf sorar, eskisi yedeklenir.
+- Alev koleksiyonu rafı ve seri sayısının Ayarlar düğmesindeki rozeti Mağaza'ya taşındı (rozet için `#seriSt` hâlâ var).
+
+## Zamanlayıcı kodları (yeni)
+- Mağaza'ya **Zamanlayıcı** rafı: Plus 3 gün 100, Plus 7 gün 200, Premium 3 gün 250, Premium 7 gün 500 kristal. 7 günlük paketlerde günlük hesapla **%14 tasarruf** yazar.
+- Sunucu: `POST /api/zpass/buy` (hesaplı), `POST /api/zamanlayici/redeem|verify` (açık, Mantar Pano ile aynı sözleşme), `POST /api/admin/zpass|zpasses` (yönetici). Yeni tablo `zpasses` (`schema.sql`, mevcut tablolara dokunmaz). Uygulamaya bağlama: `ZAMANLAYICI-BAGLANTI.md`.
+- Mantar Pano kodu çalışması genelleştirildi (`APPS` tablosu); davranışı değişmedi, mevcut testler aynen geçiyor.
+- Yeni isteğe bağlı değişkenler: `ZP_ORIGIN`, `ZP_SIGN_KEY`. `MP_ORIGIN` artık virgülle liste de kabul eder.
+- 8 yeni test (fiyatlar, güvenlik, eşzamanlı alım, 3. cihaz, süre, imza, yönetici). Toplam 68.
+
+## Sunucu (`worker/index.js`)
+- Yeni değişken **`MARKET_ORIGIN`** (`wrangler.toml [vars]`): hesaplı uçlara (`/api/init`, `sync`, `buy`, `pass/buy`, `redeem`, `mail-done`, `admin/*`) sadece bu adres(ler)den CORS ile erişilir. Boşsa eskisi gibi kapalı. Hata yanıtları dahil her yanıta başlık eklenir; çerez yok, kimlik `Authorization` başlığında.
+- Mantar Pano uçları (`/api/mantarpano/redeem|verify`) değişmedi.
+- 2 yeni test (CORS izin listesi, ön kontrol, hata yanıtları).
+
+## Kurulum notu
+- Zip'te `.assetsignore` adı `_.assetsignore` olarak gelmişti (bu yüzden bir test düşüyordu); doğru adla eklendi.
+
+---
+
 # Bu sürümde değişenler (Mantar Pano Pro / Sınırsız kodları)
 
 ## Mağaza: Mantar Pano

@@ -308,7 +308,8 @@
 
       <div class="card wide">
         <h2 class="card-title">Mağaza</h2>
-        <button id="btnStore" class="setting-btn"><span class="ico" data-ico="gem" style="--s:22px"></span>Mağazayı aç<span class="state seri-st" id="seriSt" hidden></span></button>
+        <p class="hint">Günlük girişlerinle kristal kazanırsın; kristali Mağaza'da harcarsın. Mağaza ayrı bir sitede açılır, aynı hesabınla.</p>
+        <button id="btnStore" class="setting-btn" data-act="openStore"><span class="ico" data-ico="gem" style="--s:22px"></span>Mağazayı aç<span class="state seri-st" id="seriSt" hidden></span></button>
       </div>
     </section>
   </main>
@@ -368,92 +369,6 @@
   </div>
 </div>
 
-<div class="vt vt-page" id="storePage" role="dialog" aria-modal="true" aria-label="Mağaza">
-  <button type="button" class="vt-back" id="storeBack"><span aria-hidden="true">‹</span> Geri</button>
-  <div class="vt-wrap">
-    <div class="vt-hero">
-      <div class="vt-hero-gems" aria-hidden="true"><span data-vt="gem"></span><span data-vt="gem"></span><span data-vt="gem"></span><span data-vt="gem"></span><span data-vt="gem"></span></div>
-      <div class="vt-ribbon"><i></i><b>Kristal Mağazası</b></div>
-    </div>
-    <div class="vt-bar">
-      <div class="vt-timer"><span data-vt="clock"></span><span id="vtTimer">Sonraki günlük ödül</span></div>
-      <div class="vt-bal" aria-label="Kristal bakiyen"><span data-vt="gem"></span><b id="kBal">0</b></div>
-    </div>
-
-    <section class="vt-shelf"><h3 class="vt-tit">Ücretsiz ödüller</h3><div class="vt-grid" id="freeShelf"></div></section>
-
-    <section class="vt-shelf"><h3 class="vt-tit">Aktivasyon paketleri</h3><div class="vt-grid two" id="kPacks"></div></section>
-    <div class="vt-panel">
-      <div class="pref-row"><label for="kCamId">Astrophoto Cam ID'n<small>mail taslağına yazılır</small></label>
-        <input type="text" id="kCamId" maxlength="60" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ID"></div>
-      <p class="hint" id="kLow" style="margin:10px 0 0" hidden>Yetersiz kristal! Günlük giriş yaparak kristal biriktirmeye devam et.</p>
-      <div class="k-pending" id="kPending" hidden>
-        <p class="hint" id="kPendingTx" style="margin:0 0 8px"></p>
-        <div class="stack">
-          <button type="button" id="kMailAgain" class="setting-btn">Maili tekrar aç</button>
-          <button type="button" id="kMailGmail" class="setting-btn">Gmail'de aç</button>
-          <button type="button" id="kMailCopy" class="setting-btn">Mail metnini kopyala</button>
-          <button type="button" id="kMailDone" class="setting-btn">Talebi gönderdim, gizle</button>
-        </div>
-      </div>
-    </div>
-
-    <section class="vt-shelf" style="margin-top:14px"><h3 class="vt-tit">Mantar Pano</h3><div class="vt-grid two" id="kPassShelf"></div></section>
-    <div class="vt-panel" id="kPassWrap" style="display:none"><h3>Mantar Pano kodlarım</h3>
-      <p class="hint" style="margin:0 0 8px">Kodu Mantar Pano'da Premium kodu alanına yapıştır. Süre, kodu ilk kullandığın anda başlar.</p>
-      <div class="src-stats" id="kPassList" style="margin:0"></div></div>
-
-    <section class="vt-shelf" style="margin-top:14px"><h3 class="vt-tit">Alev koleksiyonu</h3><div class="vt-grid" id="flameShelf"></div></section>
-
-    <div class="vt-panel">
-      <h3>Hesabım</h3>
-      <div class="k-stat">
-        <div><div class="param-label">Kristal bakiyen</div><div class="k-big"><span id="kBal2"></span></div></div>
-        <div style="text-align:right"><div class="param-label">Site ID'n</div><div class="k-big k-id" id="kId">--------</div><button type="button" id="kCopyId" class="k-mini">Kopyala</button></div>
-      </div>
-      <div class="src-stats" id="kToday"></div>
-      <div class="stack" style="margin-top:10px" id="kOldWrap" hidden><button type="button" id="kRestoreOld" class="setting-btn">Önceki hesabımı geri yükle</button><small class="src-stats" style="margin:6px 0 0">Sunucu eski hesabını bulamadığı için yeni hesap açıldı. Eski hesabın bu cihazda duruyor; geri yüklersen bakiyen geri gelir.</small></div>
-      <div class="pref-row" style="margin-top:10px"><label for="kCode">Hediye kodu<small>arkadaşından geldiyse</small></label>
-        <input type="text" id="kCode" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXXX"></div>
-      <div class="stack" style="margin-top:10px"><button type="button" id="kCodeUse" class="setting-btn">Kodu kullan</button></div>
-    </div>
-
-    <div class="vt-panel" id="kHistWrap" style="display:none"><h3>Son talepler</h3><div class="src-stats" id="kHist" style="margin:0"></div></div>
-
-    <div class="vt-panel" id="kOwner" hidden>
-      <h3>Hediye (yönetici)</h3>
-      <div>
-        <div class="pref-row"><label for="kAdm">Yönetici anahtarı<small>sunucudaki ADMIN_TOKEN</small></label>
-          <input type="password" id="kAdm" autocomplete="off" spellcheck="false" placeholder="anahtar"></div>
-        <div class="pref-row"><label for="kGiftAmt">Eklenecek kristal</label>
-          <input type="text" id="kGiftAmt" inputmode="numeric" autocomplete="off" value="1000"></div>
-        <div class="pref-row" style="margin-top:10px"><label for="kGiftTo">Arkadaşın Site ID'si<small>kod üretmek için; kristal eklemede boşsa kendi ID'n</small></label>
-          <input type="text" id="kGiftTo" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="8 haneli ID"></div>
-        <div class="k-big k-id" id="kGiftOut" style="margin-top:10px"></div>
-        <div class="stack" style="margin-top:10px">
-          <button type="button" id="kGiftMake" class="setting-btn">Kod üret</button>
-          <button type="button" id="kGiftAdd" class="setting-btn">Kristal ekle (doğrudan)</button>
-          <button type="button" id="kGiftClose" class="setting-btn">Bu bölümü kapat</button>
-        </div>
-        <div class="src-stats" id="kMade" style="margin:10px 0 0"></div>
-        <div class="param-label" style="margin-top:14px">Mantar Pano kodu (ücretsiz, yönetici)</div>
-        <div class="pref-row"><label for="kPassTier">Paket</label><select id="kPassTier"><option value="pro">Pro</option><option value="unl">Sınırsız</option></select></div>
-        <div class="pref-row"><label for="kPassDays">Gün</label><input type="text" id="kPassDays" inputmode="numeric" autocomplete="off" value="7"></div>
-        <div class="k-big k-id" id="kPassOut" style="margin-top:10px"></div>
-        <div class="stack" style="margin-top:10px"><button type="button" id="kPassMake" class="setting-btn">Mantar kodu üret</button><button type="button" id="kPassHist" class="setting-btn">Üretilen kodları göster</button></div>
-        <div class="src-stats" id="kPassMade" style="margin:10px 0 0"></div>
-        <div class="param-label" style="margin-top:14px">Gelen maili doğrula</div>
-        <textarea id="kVerIn" rows="5" style="width:100%;box-sizing:border-box;margin-top:6px" placeholder="Gelen mailin tamamını buraya yapıştır" autocomplete="off" spellcheck="false"></textarea>
-        <div class="stack" style="margin-top:10px"><button type="button" id="kVerBtn" class="setting-btn">Maili doğrula</button><button type="button" id="kVerDone" class="setting-btn">Talebi tamamlandı say</button></div>
-        <div class="src-stats" id="kVerOut" style="margin:10px 0 0;white-space:pre-wrap"></div>
-      </div>
-    </div>
-
-    <p class="vt-note">Paketi aldığında mail taslağı açılır. Kod, doğrulamadan sonra mail ile gönderilir.</p>
-    <p class="vt-note" style="opacity:.6">Sayfa v10 · <span id="kVer">kristal.js eski ya da yüklenmedi</span></p>
-  </div>
-</div>
-
 <div class="info-overlay" id="infoOverlay">
   <div class="info-sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle">
     <div class="info-sheet-head"><b id="infoTitle">Bilgilendirme</b></div>
@@ -465,9 +380,11 @@
 
 <script src="js/core.js?v=087c7f10"></script>
 <script src="js/vitrin.js?v=d6d885f0"></script>
-<script src="js/app.js?v=87f74b04"></script>
-<script src="js/kristal.js?v=e3344caa"></script>
-<script src="js/seri.js?v=13fbde40"></script>
+<script src="js/app.js?v=dacba17b"></script>
+<script src="js/hesap.js?v=98b11734"></script>
+<script src="js/kristal.js?v=7d28c2aa"></script>
+<script src="js/magaza.js?v=1bdcb37c"></script>
+<script src="js/seri.js?v=269c8490"></script>
 <script src="js/kart.js?v=6da26b8f"></script>
 </body>
 </html>

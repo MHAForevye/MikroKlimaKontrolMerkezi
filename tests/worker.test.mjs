@@ -265,3 +265,143 @@ test('admin/pass: yönetici ücretsiz kod üretir (gün ayarlı), kod bozdurulur
   const t0 = Date.now(), r = await redeem(g.j.code);
   assert.equal(r.j.plan, 'unlimited'); assert.ok(Math.abs(r.j.expiresAt - (t0 + 30 * 864e5)) < 5000);
 });
+
+/* ===== Mağaza ayrı sitede: hesaplı uçlar için MARKET_ORIGIN CORS ===== */
+test('MARKET_ORIGIN: izinli adres için OPTIONS 204 + başlıklar; başka adres ve Origin\'siz istek 405', { skip }, async () => {
+  const mod = await import('../worker/index.js'), env = makeEnv();
+  env.MARKET_ORIGIN = 'https://frovyes.github.io, https://ikinci.example/';
+  const pre = (path, origin) => mod.default.fetch(new Request('https://t' + path, { method: 'OPTIONS', headers: origin ? { Origin: origin, 'Access-Control-Request-Headers': 'authorization,content-type' } : {} }), env);
+  const ok = await pre('/api/sync', 'https://frovyes.github.io');
+  assert.equal(ok.status, 204); assert.equal(ok.headers.get('Access-Control-Allow-Origin'), 'https://frovyes.github.io');
+  assert.match(ok.headers.get('Access-Control-Allow-Headers'), /Authorization/); assert.match(ok.headers.get('Access-Control-Allow-Headers'), /X-MK-Admin/);
+  assert.equal((await pre('/api/admin/gift', 'https://ikinci.example')).status, 204, 'sondaki / temizlenir, ikinci adres de geçer');
+  assert.equal((await pre('/api/sync', 'https://kotu.example')).status, 405);
+  assert.equal((await pre('/api/sync')).status, 405);
+  assert.equal((await pre('/api/mantarpano/redeem', 'https://herhangi.example')).headers.get('Access-Control-Allow-Origin'), '*', 'Mantar Pano uçları eskisi gibi');
+});
+test('MARKET_ORIGIN: yanıtlar (başarı, 401, 429) izinli adrese okunabilir; başka adrese başlık eklenmez; ayar yoksa hiç eklenmez', { skip }, async () => {
+  const mod = await import('../worker/index.js'), env = makeEnv();
+  const post = (path, origin, headers = {}) => mod.default.fetch(new Request('https://t' + path, { method: 'POST', headers: { 'content-type': 'application/json', 'CF-Connecting-IP': '9.9.9.9', ...(origin ? { Origin: origin } : {}), ...headers }, body: '{}' }), env);
+  const none = await post('/api/init', 'https://frovyes.github.io');
+  assert.equal(none.status, 200); assert.equal(none.headers.get('Access-Control-Allow-Origin'), null, 'MARKET_ORIGIN yokken CORS kapalı');
+  env.MARKET_ORIGIN = 'https://frovyes.github.io';
+  const a = await post('/api/init', 'https://frovyes.github.io'); const j = await a.json();
+  assert.equal(a.headers.get('Access-Control-Allow-Origin'), 'https://frovyes.github.io'); assert.equal(a.headers.get('Vary'), 'Origin');
+  const sy = await post('/api/sync', 'https://frovyes.github.io', { Authorization: 'Bearer ' + j.id + '.' + j.token });
+  assert.equal(sy.status, 200); assert.equal(sy.headers.get('Access-Control-Allow-Origin'), 'https://frovyes.github.io');
+  const bad = await post('/api/sync', 'https://frovyes.github.io', { Authorization: 'Bearer 12345678.' + 'x'.repeat(24) });
+  assert.equal(bad.status, 401); assert.equal(bad.headers.get('Access-Control-Allow-Origin'), 'https://frovyes.github.io', 'hata mesajı da okunabilsin');
+  const other = await post('/api/init', 'https://kotu.example');
+  assert.equal(other.headers.get('Access-Control-Allow-Origin'), null);
+});
+
+/* ===== Zamanlayıcı: Plus / Premium, 3 ve 7 gün ===== */
+async function zSetup(bal = 1000) {
+  const s = await setup(), mod = await import('../worker/index.js');
+  const a = await s.call('/api/init');
+  await s.call('/api/admin/add', { to: a.j.id, n: bal - 30 }, ADM);
+  const redeem = (code, device = 'dev-aaaa1', extra = {}, path = '/api/zamanlayici/redeem', ip = '6.6.6.6') =>
+    s.call(path, { code, app: 'zamanlayici', device, v: 1, ...extra }, {}, ip);
+  return { ...s, mod, a, redeem };
+}
+
+test('zpass/buy: 4 paketin fiyatı sunucudan, bakiye doğru düşer, 13 harflik kod verir', { skip }, async () => {
+  const { call, a } = await zSetup(1000 + 100 + 200 + 250 + 500 - 1000 + 1000);   // 2050 kristal
+  let bal = 2050;
+  for (const [tier, days, cost] of [['plus', 3, 100], ['plus', 7, 200], ['premium', 3, 250], ['premium', 7, 500]]) {
+    const r = await call('/api/zpass/buy', { tier, days }, bearer(a));
+    assert.equal(r.s, 200, tier + days); bal -= cost;
+    assert.equal(r.j.s.bal, bal); assert.match(r.j.zpass.c, /^[A-Z2-9]{13}$/);
+    assert.equal(r.j.zpass.tier, tier); assert.equal(r.j.zpass.days, days); assert.equal(r.j.zpass.cost, cost);
+  }
+  const st = await call('/api/sync', {}, bearer(a));
+  assert.equal(st.j.s.zpasses.length, 4);
+  assert.deepEqual(st.j.cfg.zaman.plans.map(p => p.cost), [100, 200, 250, 500]);
+  assert.deepEqual(st.j.cfg.zaman.save7, { plus: 14, premium: 14 }, '7 günlük ~%14 ucuz');
+});
+
+test('zpass/buy: güvenlik (yetersiz bakiye, geçersiz paket/gün, istemci fiyatı yok sayılır, kimliksiz istek)', { skip }, async () => {
+  const { call, a, env } = await zSetup(150);
+  assert.equal((await call('/api/zpass/buy', { tier: 'plus', days: 7 }, bearer(a))).s, 400, '200 gerekir, 150 var');
+  const bad = [{ tier: 'altin', days: 3 }, { tier: 'plus', days: 5 }, { tier: 'plus', days: -3 }, { tier: 'plus' }, { tier: 'premium', days: '3; DROP' }, { tier: 'plus', days: 3.5 }, {}];
+  for (const b of bad) assert.equal((await call('/api/zpass/buy', b, bearer(a))).s, 400, JSON.stringify(b));
+  const ok = await call('/api/zpass/buy', { tier: 'plus', days: 3, cost: 1, price: 0, n: -5 }, bearer(a));
+  assert.equal(ok.s, 200); assert.equal(ok.j.s.bal, 50, 'istemcinin gönderdiği fiyat kullanılmaz');
+  assert.equal((await call('/api/zpass/buy', { tier: 'plus', days: 3 })).s, 401);
+  assert.equal((await call('/api/zpass/buy', { tier: 'plus', days: 3 }, { Authorization: 'Bearer 12345678.' + 'x'.repeat(24) })).s, 401);
+  assert.equal(env.db.prepare('SELECT COUNT(*) AS n FROM zpasses').get().n, 1, 'reddedilenler kod üretmez');
+  assert.equal(env.db.prepare("SELECT bal FROM users WHERE id=?").get(a.j.id).bal, 50);
+});
+
+test('zpass/buy: aynı anda iki istek, tek paketlik bakiyeyi iki kez harcayamaz', { skip }, async () => {
+  const { call, a, env } = await zSetup(100);
+  const r = await Promise.all([1, 2, 3].map(() => call('/api/zpass/buy', { tier: 'plus', days: 3 }, bearer(a))));
+  assert.equal(r.filter(x => x.s === 200).length, 1);
+  assert.equal(env.db.prepare('SELECT bal FROM users WHERE id=?').get(a.j.id).bal, 0);
+  assert.equal(env.db.prepare('SELECT COUNT(*) AS n FROM zpasses').get().n, 1);
+});
+
+test('zamanlayici/redeem: ilk kullanımda süre başlar (3 ve 7 gün), plan plus/premium döner, idempotent', { skip }, async () => {
+  const { call, a, redeem } = await zSetup(2000);
+  for (const [tier, days] of [['plus', 3], ['premium', 7]]) {
+    const code = (await call('/api/zpass/buy', { tier, days }, bearer(a))).j.zpass.c;
+    const t0 = Date.now(), r1 = await redeem(code.slice(0, 4).toLowerCase() + '-' + code.slice(4, 8) + '-' + code.slice(8));
+    assert.equal(r1.s, 200); assert.equal(r1.j.app, 'zamanlayici'); assert.equal(r1.j.plan, tier);
+    assert.ok(Math.abs(r1.j.expiresAt - (t0 + days * 864e5)) < 5000);
+    assert.equal((await redeem(code)).j.expiresAt, r1.j.expiresAt);
+    const v = await redeem(code, 'dev-aaaa1', {}, '/api/zamanlayici/verify'); assert.equal(v.s, 200);
+  }
+});
+
+test('zamanlayici/redeem: 3. cihaz reddedilir; hatalar; Mantar Pano ve Zamanlayıcı kodları birbirine geçmez', { skip }, async () => {
+  const { call, a, redeem } = await zSetup(2000);
+  const code = (await call('/api/zpass/buy', { tier: 'plus', days: 7 }, bearer(a))).j.zpass.c;
+  assert.equal((await redeem(code, 'dev-aaaa1')).s, 200); assert.equal((await redeem(code, 'dev-bbbb2')).s, 200);
+  const r3 = await redeem(code, 'dev-cccc3'); assert.equal(r3.s, 409); assert.equal(r3.j.error, 'used');
+  assert.equal((await redeem(code, 'dev-aaaa1', { app: 'mantarpano' })).j.error, 'wrong_app');
+  assert.equal((await redeem('ABCDEFGHJKLMN')).j.error, 'invalid_code');
+  assert.equal((await redeem("x' OR '1'='1")).s, 400);
+  const mp = (await call('/api/pass/buy', { tier: 'pro' }, bearer(a))).j.pass.c;
+  assert.equal((await redeem(mp)).s, 404, 'Mantar Pano kodu Zamanlayıcı\'da geçmez');
+  const zr = await call('/api/mantarpano/redeem', { code, app: 'mantarpano', device: 'dev-aaaa1', v: 1 }, {}, '7.7.7.7');
+  assert.equal(zr.s, 404, 'Zamanlayıcı kodu Mantar Pano\'da geçmez');
+});
+
+test('zamanlayici/redeem: süresi dolmuş, verify başlatmaz, deneme sınırı', { skip }, async () => {
+  const { call, a, redeem, env } = await zSetup(2000);
+  const code = (await call('/api/zpass/buy', { tier: 'plus', days: 3 }, bearer(a))).j.zpass.c;
+  assert.equal((await redeem(code, 'dev-aaaa1', {}, '/api/zamanlayici/verify')).s, 404, 'etkinleştirilmemiş kod verify ile başlamaz');
+  assert.equal(env.db.prepare('SELECT used_at FROM zpasses WHERE code=?').get(code).used_at, null);
+  await redeem(code);
+  env.db.prepare('UPDATE zpasses SET exp=? WHERE code=?').run(Math.floor(Date.now() / 1000) - 5, code);
+  const ex = await redeem(code); assert.equal(ex.s, 410); assert.equal(ex.j.error, 'expired');
+  let last; for (let i = 0; i < 45; i++) last = await redeem('ABCDEFGHJKLM' + (i % 8 + 2), 'dev-aaaa1', {}, '/api/zamanlayici/redeem', '8.8.8.8');
+  assert.equal(last.j.error, 'rate_limited'); assert.equal(last.s, 429);
+});
+
+test('zamanlayici: imzalı jeton uygulama adını taşır, anahtar yoksa jeton eklenmez; ZP_ORIGIN ayrı, Mantar Pano\'dan bağımsız', { skip }, async () => {
+  const { call, a, mod, env } = await zSetup(2000);
+  const code = (await call('/api/zpass/buy', { tier: 'premium', days: 3 }, bearer(a))).j.zpass.c;
+  const post = (e, path, o) => mod.default.fetch(new Request('https://t' + path, { method: 'POST', headers: { 'content-type': 'application/json', 'CF-Connecting-IP': '9.1.1.1', ...(o ? { Origin: o } : {}) }, body: JSON.stringify({ code, app: 'zamanlayici', device: 'dev-aaaa1', v: 1 }) }), e);
+  const noKey = await (await post(env, '/api/zamanlayici/redeem')).json(); assert.equal(noKey.token, undefined);
+  const { subtle } = globalThis.crypto, kp = await subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+  env.ZP_SIGN_KEY = JSON.stringify(await subtle.exportKey('jwk', kp.privateKey)); env.MP_ORIGIN = 'https://mantar.example'; env.ZP_ORIGIN = 'https://zaman.example';
+  const r = await post(env, '/api/zamanlayici/redeem', 'https://zaman.example'), j = await r.json();
+  assert.equal(r.headers.get('Access-Control-Allow-Origin'), 'https://zaman.example');
+  const [p, sig] = j.token.split('.'), b64 = x => Uint8Array.from(atob(x.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+  assert.ok(await subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, kp.publicKey, b64(sig), new TextEncoder().encode(p)));
+  const pay = JSON.parse(new TextDecoder().decode(b64(p))); assert.equal(pay.app, 'zamanlayici'); assert.equal(pay.plan, 'premium'); assert.equal(pay.dev, 'dev-aaaa1');
+  const mp = await mod.default.fetch(new Request('https://t/api/mantarpano/verify', { method: 'OPTIONS', headers: { Origin: 'https://mantar.example' } }), env);
+  assert.equal(mp.headers.get('Access-Control-Allow-Origin'), 'https://mantar.example', 'Mantar Pano ayarı etkilenmez');
+});
+
+test('admin: Zamanlayıcı kodu üretir/listeler; yetkisiz ve geçersiz değerler reddedilir', { skip }, async () => {
+  const { call, redeem } = await zSetup(100);
+  assert.ok([401, 403].includes((await call('/api/admin/zpass', { tier: 'plus', days: 3 })).s));
+  const g = await call('/api/admin/zpass', { tier: 'premium', days: 7 }, ADM);
+  assert.equal(g.s, 200); assert.match(g.j.code, /^[A-Z2-9]{13}$/); assert.equal(g.j.tier, 'premium');
+  assert.equal((await call('/api/admin/zpass', { tier: 'x', days: 7 }, ADM)).s, 400);
+  assert.equal((await call('/api/admin/zpass', { tier: 'plus', days: 0 }, ADM)).s, 400);
+  assert.equal((await redeem(g.j.code)).j.plan, 'premium');
+  const l = await call('/api/admin/zpasses', {}, ADM); assert.equal(l.j.passes.length, 1); assert.equal(l.j.passes[0].c, g.j.code);
+});

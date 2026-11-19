@@ -10,8 +10,8 @@ test('CSP: satır içi olay yöneticisi ve satır içi betik yok (index.html)', 
   assert.deepEqual(html.match(/<script(?![^>]*\bsrc=)(?![^>]*ld\+json)[^>]*>/g) || [], []);
   assert.ok(!/javascript:/i.test(html));
 });
-test('CSP: app.js/kristal.js HTML dizelerinde onclick yok', () => {
-  for (const f of ['js/app.js', 'js/kristal.js']) assert.ok(!/\son(?:click|change|input|keydown)=\\?"/.test(readFileSync(f, 'utf8')), f);
+test('CSP: app.js/magaza.js HTML dizelerinde onclick yok', () => {
+  for (const f of ['js/app.js', 'js/kristal.js', 'js/magaza.js']) assert.ok(!/\son(?:click|change|input|keydown)=\\?"/.test(readFileSync(f, 'utf8')), f);
 });
 test('data-act: HTML ve dizelerdeki her işlem ACT tablosunda var', () => {
   const used = new Set([...html.matchAll(/data-act="(\w+)"/g), ...app.matchAll(/data-act=\\?"(\w+)\\?"/g)].map(m => m[1]));
