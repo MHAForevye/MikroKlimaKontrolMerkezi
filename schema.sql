@@ -36,7 +36,7 @@ CREATE INDEX IF NOT EXISTS codes_to ON codes(to_id);
 CREATE TABLE IF NOT EXISTS log (
   id    INTEGER PRIMARY KEY AUTOINCREMENT,
   uid   TEXT NOT NULL,
-  kind  TEXT NOT NULL,                    -- daily | streak | buy | redeem | admin_add
+  kind  TEXT NOT NULL,                    -- daily | streak | buy | redeem | admin_add | card_new | card_use | card_cancel | card_refund
   delta INTEGER NOT NULL,
   ref   TEXT NOT NULL DEFAULT '',
   t     TEXT NOT NULL
@@ -88,3 +88,24 @@ CREATE TABLE IF NOT EXISTS zpasses (
   devs    TEXT NOT NULL DEFAULT ''        -- bağlı cihaz kimlikleri (virgülle), en fazla CFG.zaman.maxDevices
 );
 CREATE INDEX IF NOT EXISTS zpasses_uid ON zpasses(uid, created);
+
+-- Hediye kartları (kristal kartı): 8 haneli no + 3 haneli CVV + SKT (AA/YY) ile bozdurulur. Kristal oluşturanın hesabından kart oluşturulurken düşer. Tekrar çalıştırmak güvenlidir.
+CREATE TABLE IF NOT EXISTS gcards (
+  no         TEXT PRIMARY KEY,            -- 8 haneli kart numarası (son hane Luhn)
+  cvv        TEXT NOT NULL,               -- 3 haneli güvenlik kodu
+  ex         TEXT NOT NULL,               -- SKT, "AA/YY"
+  exp        INTEGER NOT NULL,            -- bitiş (unix sn): SKT ayının sonu
+  uid        TEXT NOT NULL,               -- kartı oluşturan Site ID
+  n          INTEGER NOT NULL,            -- kristal tutarı
+  tpl        INTEGER NOT NULL DEFAULT 0,  -- şablon (0-14)
+  msg        TEXT NOT NULL DEFAULT '',    -- kısa mesaj
+  frm        TEXT NOT NULL DEFAULT '',    -- gönderen adı (isteğe bağlı)
+  t          TEXT NOT NULL,
+  created    INTEGER NOT NULL,
+  status     TEXT NOT NULL DEFAULT 'active',  -- active | used | cancelled | expired
+  to_id      TEXT,                        -- bozduran Site ID
+  used_at    INTEGER,
+  bad        INTEGER NOT NULL DEFAULT 0,  -- art arda yanlış deneme
+  lock_until INTEGER NOT NULL DEFAULT 0   -- kilit bitişi (unix sn)
+);
+CREATE INDEX IF NOT EXISTS gcards_uid ON gcards(uid, created);

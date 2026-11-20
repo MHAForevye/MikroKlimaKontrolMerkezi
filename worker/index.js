@@ -31,6 +31,16 @@ const CFG = {
       { tier: 'premium', days: 3, cost: 250 }, { tier: 'premium', days: 7, cost: 500 }
     ]
   },
+  // Hediye kartı: kristal kartla başka hesaba/cihaza taşınır. Tutar, şablon sayısı ve güvenlik ayarları sadece burada belirlenir.
+  cards: {
+    min: 10, max: 100000,   // bir kartın tutarı (kristal)
+    templates: 15,          // geçerli şablon numaraları 0..14 (tasarımlar kart uygulamasında)
+    validMonths: 12,        // SKT: oluşturulduğu aydan kaç ay sonra (o ayın sonuna kadar geçerli)
+    maxActive: 20,          // bir hesabın aynı anda en fazla kaç aktif kartı olur
+    failLock: 5,            // bir karta art arda bu kadar yanlış denemeden sonra kart kilitlenir
+    lockMin: 15,            // kilit süresi (dakika)
+    tryPerIp10m: 40         // aynı IP'den 10 dakikada en fazla kaç kart deneme
+  },
   maxNewPerIp: 20,        // aynı IP'den günde en fazla kaç yeni hesap (operatörler tek IP'yi yüzlerce kişiyle paylaşır, o yüzden cömert)
   adminFailPer10m: 30,    // aynı IP'den 10 dakikada en fazla kaç yanlış yönetici anahtarı denemesi
   redeemPer10m: 20,       // bir hesabın 10 dakikada en fazla kaç kod denemesi
@@ -127,7 +137,7 @@ async function state(env, id, extra) {
   const zpasses = (await env.DB.prepare('SELECT code AS c, tier, days, cost, t, used_at AS used, exp FROM zpasses WHERE uid=? ORDER BY created DESC LIMIT 20').bind(id).all()).results || [];
   return Object.assign({
     ok: 1, s: Object.assign({}, u, { reqs: reqs.reverse(), codes, passes, zpasses, streak: sk || { n: 0, best: 0, shield: 0, paid: 0, last: '' } }),
-    cfg: { daily: CFG.daily, packs: CFG.packs, streak: { every: CFG.streakEvery, bonus: CFG.streakBonus }, mantar: { days: CFG.mantar.days, tiers: CFG.mantar.tiers }, zaman: { tiers: CFG.zaman.tiers, plans: CFG.zaman.plans, save7: zSave7() } }, today: today(), now: nowSec()
+    cfg: { daily: CFG.daily, packs: CFG.packs, streak: { every: CFG.streakEvery, bonus: CFG.streakBonus }, mantar: { days: CFG.mantar.days, tiers: CFG.mantar.tiers }, zaman: { tiers: CFG.zaman.tiers, plans: CFG.zaman.plans, save7: zSave7() }, cards: { min: CFG.cards.min, max: CFG.cards.max, templates: CFG.cards.templates, validMonths: CFG.cards.validMonths, maxActive: CFG.cards.maxActive } }, today: today(), now: nowSec()
   }, extra || {});
 }
 async function addLog(env, uid, kind, delta, ref) {
@@ -246,6 +256,117 @@ async function redeem(req, env, u, b) {
   if (!res[0].meta.changes) return fail('Bu kod daha önce kullanılmış.');
   await addLog(env, u.id, 'redeem', row.n, c);
   return json(await state(env, u.id, { added: row.n }));
+}
+
+/* ===== Hediye kartı =====
+   Oluştururken tutar oluşturanın bakiyesinden atomik düşer. Bozdururken 8 haneli no + CVV + SKT'nin üçü de tutmalı.
+   Yanlış denemeler hesap ve IP başına sınırlanır, karta art arda yanlış deneme kartı geçici kilitler.
+   Kart bilgileri yanlışsa cevap hep aynıdır (kartın var olup olmadığı sızmaz). Kart tek kullanımlıktır.
+   Süresi dolan kart, oluşturanın bir sonraki /api/card/list çağrısında tutarı iade edilerek kapanır. */
+const luhnOk = s => { let sum = 0; for (let i = 0; i < s.length; i++) { let d = +s[s.length - 1 - i]; if (i % 2) { d *= 2; if (d > 9) d -= 9; } sum += d; } return sum % 10 === 0; };
+function newCardNo() {                       // 7 rastgele hane (ilki 0 değil) + Luhn sağlama hanesi
+  const body = String(1 + rndInt(9)) + rndStr(6, '0123456789');
+  for (let c = 0; c < 10; c++) if (luhnOk(body + c)) return body + c;
+}
+const cardOk = no => /^\d{8}$/.test(no) && luhnOk(no);
+const cardEx = (months) => {                 // SKT etiketi ve bitiş anı (TR saatiyle ayın son anı)
+  const d = new Date(Date.now() + 3 * 3600e3), t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, 1));
+  const end = Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 1) / 1000 - 3 * 3600 - 1;
+  return { ex: String(t.getUTCMonth() + 1).padStart(2, '0') + '/' + String(t.getUTCFullYear() % 100).padStart(2, '0'), exp: end };
+};
+const normEx = v => { const d = String(v || '').replace(/\D/g, ''); return d.length === 4 && +d.slice(0, 2) >= 1 && +d.slice(0, 2) <= 12 ? d.slice(0, 2) + '/' + d.slice(2) : ''; };
+const cleanTxt = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+const CARD_BAD = 'Kart bilgileri tutmuyor. Numara, SKT ve CVV\'yi kontrol et.';
+const CARD_COLS = 'no,cvv,ex,exp,n,tpl,msg,frm,t,status,used_at,created';
+
+async function cardSweep(env, uid) {         // süresi dolan aktif kartların tutarını oluşturana iade et
+  const rows = (await env.DB.prepare("SELECT no,n FROM gcards WHERE uid=? AND status='active' AND exp<=? LIMIT 20").bind(uid, nowSec()).all()).results || [];
+  for (const r of rows) {
+    const res = await env.DB.batch([
+      env.DB.prepare("UPDATE users SET bal=bal+?, spent=spent-? WHERE id=? AND EXISTS (SELECT 1 FROM gcards WHERE no=? AND status='active' AND exp<=?)").bind(r.n, r.n, uid, r.no, nowSec()),
+      env.DB.prepare("UPDATE gcards SET status='expired' WHERE no=? AND status='active' AND exp<=?").bind(r.no, nowSec())
+    ]);
+    if (res[0].meta.changes) await addLog(env, uid, 'card_refund', r.n, r.no);
+  }
+}
+async function cardList(env, uid) {
+  await cardSweep(env, uid);
+  return (await env.DB.prepare('SELECT ' + CARD_COLS + ' FROM gcards WHERE uid=? ORDER BY created DESC, rowid DESC LIMIT 30').bind(uid).all()).results || [];
+}
+const cardOut = r => ({ no: r.no, cvv: r.cvv, ex: r.ex, exp: r.exp, n: r.n, tpl: r.tpl, msg: r.msg, frm: r.frm, t: r.t, status: r.status, used: r.used_at || 0 });
+
+async function cardCreate(req, env, u, b) {
+  const K = CFG.cards;
+  await rlBump(env, 'cnew', u.id);
+  if ((await rlCount(env, 'cnew', u.id)) > CFG.buyPer10m) return tooMany();
+  const n = toInt(b.n, K.min, K.max), tpl = toInt(b.tpl == null ? 0 : b.tpl, 0, K.templates - 1);
+  if (n === null) return fail('Tutar ' + K.min + ' ile ' + K.max + ' kristal arasında olmalı.');
+  if (tpl === null) return fail('Geçersiz kart tasarımı.');
+  await cardSweep(env, u.id);
+  const act = await env.DB.prepare("SELECT COUNT(*) AS c FROM gcards WHERE uid=? AND status='active'").bind(u.id).first();
+  if (act && act.c >= K.maxActive) return fail('Aynı anda en fazla ' + K.maxActive + ' aktif kartın olabilir. Birini iptal et ya da kullanılmasını bekle.');
+  const msg = cleanTxt(b.msg, 80), frm = cleanTxt(b.frm, 24), t = stamp(), { ex, exp } = cardEx(K.validMonths), cvv = rndStr(3, '0123456789');
+  // bakiye kontrolü ve düşüm tek atomik komutta: yetersizse hiçbir şey değişmez
+  const up = await env.DB.prepare('UPDATE users SET bal=bal-?, spent=spent+? WHERE id=? AND bal>=?').bind(n, n, u.id, n).run();
+  if (!up.meta.changes) return fail('Yetersiz kristal! Günlük giriş yaparak kristal biriktirmeye devam et.', 400, await state(env, u.id));
+  let no = '';
+  for (let i = 0; i < 6 && !no; i++) {
+    const c = newCardNo();
+    try { await env.DB.prepare('INSERT INTO gcards(no,cvv,ex,exp,uid,n,tpl,msg,frm,t,created) VALUES(?,?,?,?,?,?,?,?,?,?,?)').bind(c, cvv, ex, exp, u.id, n, tpl, msg, frm, t, nowSec()).run(); no = c; } catch (e) {}   // aynı numara varsa yeniden dene
+  }
+  if (!no) {   // kart yazılamadıysa kristali iade et
+    await env.DB.prepare('UPDATE users SET bal=bal+?, spent=spent-? WHERE id=?').bind(n, n, u.id).run();
+    return fail('Kart oluşturulamadı, kristalin iade edildi. Tekrar dene.', 500);
+  }
+  await addLog(env, u.id, 'card_new', -n, no);
+  return json(await state(env, u.id, { card: cardOut({ no, cvv, ex, exp, n, tpl, msg, frm, t, status: 'active', used_at: 0 }) }));
+}
+
+async function cardListEp(req, env, u) { return json(await state(env, u.id, { cards: (await cardList(env, u.id)).map(cardOut) })); }
+
+async function cardCancel(req, env, u, b) {   // kullanılmamış kartı iptal et, tutar geri gelir
+  await rlBump(env, 'ccan', u.id);
+  if ((await rlCount(env, 'ccan', u.id)) > CFG.buyPer10m) return tooMany();
+  const no = String(b.no || '').replace(/\D/g, '');
+  const row = await env.DB.prepare('SELECT no,n,status FROM gcards WHERE no=? AND uid=?').bind(no, u.id).first();
+  if (!row) return fail('Kart bulunamadı.', 404);
+  if (row.status !== 'active') return fail(row.status === 'used' ? 'Bu kart kullanılmış, iptal edilemez.' : 'Bu kart zaten kapalı.');
+  const res = await env.DB.batch([
+    env.DB.prepare("UPDATE users SET bal=bal+?, spent=spent-? WHERE id=? AND EXISTS (SELECT 1 FROM gcards WHERE no=? AND uid=? AND status='active')").bind(row.n, row.n, u.id, no, u.id),
+    env.DB.prepare("UPDATE gcards SET status='cancelled' WHERE no=? AND uid=? AND status='active'").bind(no, u.id)
+  ]);
+  if (!res[0].meta.changes) return fail('Bu kart kullanılmış, iptal edilemez.');
+  await addLog(env, u.id, 'card_cancel', row.n, no);
+  return json(await state(env, u.id, { cancelled: no, refunded: row.n, cards: (await cardList(env, u.id)).map(cardOut) }));
+}
+
+async function cardRedeem(req, env, u, b) {
+  const K = CFG.cards, ip = req.headers.get('CF-Connecting-IP') || 'x';
+  await rlBump(env, 'cuse', u.id); await rlBump(env, 'cip', ip);
+  if ((await rlCount(env, 'cuse', u.id)) > CFG.redeemPer10m || (await rlCount(env, 'cip', ip)) > K.tryPerIp10m) return tooMany();
+  const no = String(b.no || '').replace(/\D/g, ''), cvv = String(b.cvv || '').replace(/\D/g, ''), ex = normEx(b.ex);
+  if (!cardOk(no) || !/^\d{3}$/.test(cvv) || !ex) return fail(CARD_BAD);   // biçim ya da Luhn hatası: karta dokunmaz, sayaç artmaz
+  const row = await env.DB.prepare('SELECT no,cvv,ex,exp,n,tpl,msg,frm,status,lock_until,bad FROM gcards WHERE no=?').bind(no).first();
+  if (!row) return fail(CARD_BAD);
+  const now = nowSec();
+  if (row.lock_until > now) return fail(CARD_BAD);   // kilitliyken doğru bilgi de geçmez (kaba kuvveti durdurur); neden söylenmez
+  const good = eq(row.cvv, cvv) & eq(row.ex, ex);    // iki karşılaştırma da yapılır (erken çıkış yok)
+  if (!good) {
+    const bad = row.bad + 1, lock = bad >= K.failLock;
+    await env.DB.prepare('UPDATE gcards SET bad=?, lock_until=? WHERE no=?').bind(lock ? 0 : bad, lock ? now + K.lockMin * 60 : 0, no).run();
+    return fail(CARD_BAD);
+  }
+  if (row.status === 'used') return fail('Bu kart daha önce kullanılmış.');
+  if (row.status !== 'active') return fail('Bu kart artık geçerli değil.');
+  if (row.exp <= now) return fail('Bu kartın son kullanma tarihi geçmiş.');
+  // ikisi tek işlemde: kart kullanılmamışsa kristal eklenir ve kart kapanır
+  const res = await env.DB.batch([
+    env.DB.prepare("UPDATE users SET bal=bal+?, gift=gift+? WHERE id=? AND EXISTS (SELECT 1 FROM gcards WHERE no=? AND status='active' AND exp>?)").bind(row.n, row.n, u.id, no, now),
+    env.DB.prepare("UPDATE gcards SET status='used', to_id=?, used_at=?, bad=0 WHERE no=? AND status='active' AND exp>?").bind(u.id, now, no, now)
+  ]);
+  if (!res[0].meta.changes) return fail('Bu kart daha önce kullanılmış.');
+  await addLog(env, u.id, 'card_use', row.n, no);
+  return json(await state(env, u.id, { added: row.n, card: { no: row.no, ex: row.ex, n: row.n, tpl: row.tpl, msg: row.msg, frm: row.frm } }));
 }
 
 /* ===== Mantar Pano geçişleri =====
@@ -485,6 +606,10 @@ async function route(req, env) {
     case '/api/pass/buy': return passBuy(req, env, u, b);
     case '/api/zpass/buy': return zBuy(req, env, u, b);
     case '/api/redeem': return redeem(req, env, u, b);
+    case '/api/card/create': return cardCreate(req, env, u, b);
+    case '/api/card/list': return cardListEp(req, env, u);
+    case '/api/card/cancel': return cardCancel(req, env, u, b);
+    case '/api/card/redeem': return cardRedeem(req, env, u, b);
     case '/api/mail-done': return mailDone(req, env, u);
   }
   return fail('Bulunamadı.', 404);
