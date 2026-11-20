@@ -279,6 +279,22 @@ const cleanTxt = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u001f\
 const CARD_BAD = 'Kart bilgileri tutmuyor. Numara, SKT ve CVV\'yi kontrol et.';
 const CARD_COLS = 'no,cvv,ex,exp,n,tpl,msg,frm,t,status,used_at,created';
 
+/* Kart tablosu eski bir veritabanında yoksa ilk kart isteğinde kendisi kurulur (schema.sql'i unutmak "Sunucu hatası" yapmasın).
+   schema.sql'deki gcards ile aynıdır; zaten varsa hiçbir şey değişmez. */
+const GCARDS_SQL = [
+  `CREATE TABLE IF NOT EXISTS gcards (
+    no TEXT PRIMARY KEY, cvv TEXT NOT NULL, ex TEXT NOT NULL, exp INTEGER NOT NULL, uid TEXT NOT NULL, n INTEGER NOT NULL,
+    tpl INTEGER NOT NULL DEFAULT 0, msg TEXT NOT NULL DEFAULT '', frm TEXT NOT NULL DEFAULT '', t TEXT NOT NULL, created INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active', to_id TEXT, used_at INTEGER, bad INTEGER NOT NULL DEFAULT 0, lock_until INTEGER NOT NULL DEFAULT 0)`,
+  'CREATE INDEX IF NOT EXISTS gcards_uid ON gcards(uid, created)'
+];
+const cardsReady = new WeakSet();
+async function ensureCards(env) {
+  if (cardsReady.has(env.DB)) return;
+  for (const q of GCARDS_SQL) await env.DB.prepare(q).run();
+  cardsReady.add(env.DB);
+}
+
 async function cardSweep(env, uid) {         // süresi dolan aktif kartların tutarını oluşturana iade et
   const rows = (await env.DB.prepare("SELECT no,n FROM gcards WHERE uid=? AND status='active' AND exp<=? LIMIT 20").bind(uid, nowSec()).all()).results || [];
   for (const r of rows) {
@@ -297,6 +313,7 @@ const cardOut = r => ({ no: r.no, cvv: r.cvv, ex: r.ex, exp: r.exp, n: r.n, tpl:
 
 async function cardCreate(req, env, u, b) {
   const K = CFG.cards;
+  await ensureCards(env);
   await rlBump(env, 'cnew', u.id);
   if ((await rlCount(env, 'cnew', u.id)) > CFG.buyPer10m) return tooMany();
   const n = toInt(b.n, K.min, K.max), tpl = toInt(b.tpl == null ? 0 : b.tpl, 0, K.templates - 1);
@@ -322,9 +339,10 @@ async function cardCreate(req, env, u, b) {
   return json(await state(env, u.id, { card: cardOut({ no, cvv, ex, exp, n, tpl, msg, frm, t, status: 'active', used_at: 0 }) }));
 }
 
-async function cardListEp(req, env, u) { return json(await state(env, u.id, { cards: (await cardList(env, u.id)).map(cardOut) })); }
+async function cardListEp(req, env, u) { await ensureCards(env); return json(await state(env, u.id, { cards: (await cardList(env, u.id)).map(cardOut) })); }
 
 async function cardCancel(req, env, u, b) {   // kullanılmamış kartı iptal et, tutar geri gelir
+  await ensureCards(env);
   await rlBump(env, 'ccan', u.id);
   if ((await rlCount(env, 'ccan', u.id)) > CFG.buyPer10m) return tooMany();
   const no = String(b.no || '').replace(/\D/g, '');
@@ -341,6 +359,7 @@ async function cardCancel(req, env, u, b) {   // kullanılmamış kartı iptal e
 }
 
 async function cardRedeem(req, env, u, b) {
+  await ensureCards(env);
   const K = CFG.cards, ip = req.headers.get('CF-Connecting-IP') || 'x';
   await rlBump(env, 'cuse', u.id); await rlBump(env, 'cip', ip);
   if ((await rlCount(env, 'cuse', u.id)) > CFG.redeemPer10m || (await rlCount(env, 'cip', ip)) > K.tryPerIp10m) return tooMany();

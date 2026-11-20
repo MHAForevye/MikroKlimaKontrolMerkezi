@@ -196,3 +196,16 @@ test('cfg: kart ayarları (tutar sınırı, şablon sayısı) istemciye gider', 
   const r = await call('/api/sync', {}, a.h);
   assert.deepEqual(r.j.cfg.cards, { min: 10, max: 100000, templates: 15, validMonths: 12, maxActive: 20 });
 });
+
+test('eski veritabanı (gcards tablosu yok): kart uçları tabloyu kendisi kurar, kart oluşur ve bozdurulur', { skip }, async () => {
+  const { call, user, env } = await setup();
+  env.db.exec('DROP TABLE gcards');
+  const a = await user(500), b = await user(0);
+  const c = await call('/api/card/create', { n: 100, tpl: 0 }, a.h, a.ip);
+  assert.equal(c.s, 200, JSON.stringify(c.j));
+  assert.equal(c.j.s.bal, 400);
+  const l = await call('/api/card/list', {}, a.h, a.ip);
+  assert.equal(l.s, 200); assert.equal(l.j.cards.length, 1);
+  const r = await call('/api/card/redeem', { no: c.j.card.no, cvv: c.j.card.cvv, ex: c.j.card.ex }, b.h, b.ip);
+  assert.equal(r.s, 200, JSON.stringify(r.j)); assert.equal(r.j.added, 100);
+});

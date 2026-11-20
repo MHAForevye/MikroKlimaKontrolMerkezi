@@ -1,3 +1,7 @@
+## Hediye kartı: tablo otomatik kurulur
+- `worker/index.js`: `gcards` tablosu veritabanında yoksa ilk kart isteğinde kendisi kurulur (`schema.sql`'i çalıştırmayı unutmak artık "Sunucu hatası" yapmaz). Testi: `tests/cards.test.mjs`.
+- `.assetsignore` adı düzeltildi (zip içinde `_.assetsignore` olmuştu).
+
 # Bu sürümde değişenler (Mağaza ayrı repoya taşındı)
 
 ## Mağaza artık bu repoda değil
