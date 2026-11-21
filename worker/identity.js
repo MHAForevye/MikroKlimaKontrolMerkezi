@@ -4,6 +4,34 @@
 import { sendMail as sendMailShared, mailReady } from './mail.js';
 
 const USERNAME_RE = /^#[A-Z0-9]{8,29}$/, EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/* schema.sql canlı D1'e uygulanmadıysa her /identity/* isteği "no such table: id_users" ile 500 (Sunucu hatası) verirdi.
+   Tablolar eksikse (IF NOT EXISTS, schema.sql ile birebir aynı) burada kendiliğinden kurulur; isolate başına bir kez çalışır. */
+const ID_SCHEMA = [
+  "CREATE TABLE IF NOT EXISTS id_users ( id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, salt TEXT NOT NULL, hash TEXT NOT NULL, verified INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, username TEXT UNIQUE, uname_first INTEGER NOT NULL DEFAULT 0, uname_hist TEXT NOT NULL DEFAULT '[]', photo_at INTEGER, tf_method TEXT, tf_secret TEXT, tf_draft TEXT, google TEXT, devices TEXT NOT NULL DEFAULT '[]', apps TEXT NOT NULL DEFAULT '{}' )",
+  "CREATE TABLE IF NOT EXISTS id_sessions ( id TEXT PRIMARY KEY, uid TEXT NOT NULL, a_hash TEXT NOT NULL, r_hash TEXT NOT NULL, a_exp INTEGER NOT NULL, r_exp INTEGER NOT NULL, device TEXT NOT NULL DEFAULT '', dtype TEXT NOT NULL DEFAULT '', loc TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, last INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0 )",
+  "CREATE INDEX IF NOT EXISTS id_sessions_uid ON id_sessions(uid)",
+  "CREATE INDEX IF NOT EXISTS id_sessions_a ON id_sessions(a_hash)",
+  "CREATE INDEX IF NOT EXISTS id_sessions_r ON id_sessions(r_hash)",
+  "CREATE TABLE IF NOT EXISTS id_codes (uid TEXT NOT NULL, kind TEXT NOT NULL, h TEXT NOT NULL, exp INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (uid, kind))",
+  "CREATE TABLE IF NOT EXISTS id_chal (id TEXT PRIMARY KEY, uid TEXT NOT NULL, exp INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0)",
+  "CREATE TABLE IF NOT EXISTS id_events (id INTEGER PRIMARY KEY AUTOINCREMENT, uid TEXT NOT NULL, type TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL)",
+  "CREATE INDEX IF NOT EXISTS id_events_uid ON id_events(uid, id)",
+  "CREATE TABLE IF NOT EXISTS id_photos (uid TEXT PRIMARY KEY, mime TEXT NOT NULL, data BLOB NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS id_google (sub TEXT PRIMARY KEY, uid TEXT NOT NULL UNIQUE, email TEXT NOT NULL, nopw INTEGER NOT NULL DEFAULT 0)",
+  "CREATE TABLE IF NOT EXISTS id_authcodes (h TEXT PRIMARY KEY, uid TEXT NOT NULL, app TEXT NOT NULL, redirect TEXT NOT NULL, challenge TEXT NOT NULL, exp INTEGER NOT NULL, used INTEGER NOT NULL DEFAULT 0)",
+  "CREATE INDEX IF NOT EXISTS id_authcodes_uid ON id_authcodes(uid)",
+  "CREATE TABLE IF NOT EXISTS id_app_sessions ( id TEXT PRIMARY KEY, uid TEXT NOT NULL, app TEXT NOT NULL, a_hash TEXT NOT NULL, r_hash TEXT NOT NULL, a_exp INTEGER NOT NULL, r_exp INTEGER NOT NULL, created INTEGER NOT NULL, last INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0 )",
+  "CREATE INDEX IF NOT EXISTS id_app_sessions_uid ON id_app_sessions(uid)",
+  "CREATE INDEX IF NOT EXISTS id_app_sessions_a ON id_app_sessions(a_hash)",
+  "CREATE INDEX IF NOT EXISTS id_app_sessions_r ON id_app_sessions(r_hash)"
+];
+const ID_SCHEMA_OK = new WeakSet();
+async function ensureIdSchema(env) {
+  if (!env.DB || ID_SCHEMA_OK.has(env.DB)) return;
+  await env.DB.batch(ID_SCHEMA.map(q => env.DB.prepare(q)));
+  ID_SCHEMA_OK.add(env.DB);
+}
+
 export const ID_CFG = {
   pwMin: 10, photoMax: 1900000, photoCooldownH: 24,
   unameWindowH: 48, unameWindowMax: 2, unameCooldownD: 15,
@@ -497,6 +525,7 @@ export function makeIdentity(c) {
   async function handle(req, env, path, b) {
     const m = req.method;
     try {
+      await ensureIdSchema(env);
       let r;
       if ((r = /^\/identity\/photo\/(usr_[0-9a-f]{16})$/.exec(path)) && m === 'GET') return await H_.getPhoto(env, req, r[1]);
       if ((r = /^\/identity\/sessions\/([0-9a-f]{24})$/.exec(path)) && m === 'DELETE') return await H_.revoke(env, req, r[1]);
