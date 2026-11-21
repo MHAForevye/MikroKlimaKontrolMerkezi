@@ -458,7 +458,12 @@ export function makeIdentity(c) {
   function checkApp(env, b) {
     const a = ID_CFG.apps.find(x => x.id === b.app);
     if (!a) throw new E('Bilinmeyen uygulama.', 'BAD_APP', 400);
-    if (!redirectsOf(env, a.id).includes(String(b.redirect || ''))) throw new E('Bu uygulama için yönlendirme adresi izinli değil.', 'BAD_REDIRECT', 400);
+    const allowed = redirectsOf(env, a.id);
+    if (!allowed.includes(String(b.redirect || ''))) {
+      // Kurulum hatası kolay bulunsun: gelen adres ve (gizli olmayan) izinli adresler mesajda görünür.
+      const got = String(b.redirect || '').slice(0, 200);
+      throw new E('Bu uygulama için yönlendirme adresi izinli değil. Gelen: ' + (got || '(boş)') + ' — ' + (allowed.length ? 'İzinli: ' + allowed.join(' , ') : 'Sunucuda ' + a.id + ' için ID_REDIRECTS tanımlı DEĞİL.'), 'BAD_REDIRECT', 400);
+    }
     return a;
   }
   H_.authorizeInfo = async (env, req, b) => {
