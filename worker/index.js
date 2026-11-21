@@ -2,6 +2,9 @@
    Bakiye, günlük ödül, satın alma, hediye kodu: hepsi burada hesaplanır; tarayıcı sadece ister ve gösterir.
    Fiyatları ya da günlük ödülü değiştirmek için sadece CFG bloğunu düzenle. */
 
+import { makeNexus } from './nexus.js';
+import { makeIdentity } from './identity.js';
+
 const CFG = {
   daily: 30,
   streakEvery: 7,         // seri her bu kadar günde bir ödül verir
@@ -591,15 +594,33 @@ async function adminDone(env, b) {
 async function route(req, env) {
   const path = new URL(req.url).pathname.replace(/\/+$/, '');
   const open = openOf(path);   // Mantar Pano / Zamanlayıcı'dan, başka alan adından çağrılır
+  if (req.method === 'OPTIONS' && path.startsWith('/identity/')) {
+    const ch = idCors(req, env);
+    return new Response(null, { status: ch ? 204 : 403, headers: ch || {} });
+  }
   if (req.method === 'OPTIONS' && path.startsWith('/api/')) {
     const ch = corsHeaders(req, env, open);
     if (ch) return new Response(null, { status: 204, headers: ch });
+  }
+  // FOREVYE ID: her yöntem (GET/PATCH/DELETE dahil); kendi CORS ve hata biçimi var
+  if (path.startsWith('/identity/')) {
+    const photo = path === '/identity/profile/photo' && req.method === 'POST';
+    const bb = (req.method === 'GET' || photo) ? {} : await body(req);
+    if (bb === null) return json({ code: 'TOO_LARGE', message: 'İstek çok büyük.' }, 413);
+    return IDENT.handle(req, env, path, bb);
+  }
+  // Nexus bankası: sunucudan sunucuya hediye kartı bozdurma (HMAC imzalı; ham gövde imzalanır)
+  if (path === '/api/ext/giftcard/health' && req.method === 'GET') return json({ ok: true });
+  if (path === '/api/ext/giftcard/redeem' && req.method === 'POST') {
+    const raw = await req.text();
+    return raw.length > 4000 ? json({ ok: false, error: 'invalid' }, 413) : NEX.extRedeem(req, env, raw);
   }
   if (req.method !== 'POST') return fail('Sadece POST.', 405);
   const b = await body(req);
   if (b === null) return fail('İstek çok büyük.', 413);
   if (open) return mantarRedeem(req, env, b, path.endsWith('/verify'), open);
 
+  if (path.startsWith('/api/npass/')) return NEX.handle(path, req, env, b);
   if (path === '/api/init') return init(req, env);
   if (path.startsWith('/api/admin/')) {
     const ip = req.headers.get('CF-Connecting-IP') || 'x';
@@ -634,12 +655,22 @@ async function route(req, env) {
   return fail('Bulunamadı.', 404);
 }
 
+/* ===== Modüller (Nexus Pass, Nexus hediye kartı, FOREVYE ID) ===== */
+const CTX = { json, fail, sha256hex, rndStr, eq, nowSec, addLog, rlBump, rlCount, tooMany, toInt, auth, AB, CFG, stamp, cardOk, ensureCards };
+const NEX = makeNexus(CTX), IDENT = makeIdentity(CTX);
+/* FOREVYE ID'ye erişebilen adresler: ID_ORIGIN (virgülle) + MARKET_ORIGIN. Hiçbiri yoksa tarayıcıdan okunamaz. Çerez yok, kimlik Authorization başlığında. */
+function idCors(req, env) {
+  const o = req.headers.get('Origin') || '', ok = [...String(env.ID_ORIGIN || '').split(','), ...marketOrigins(env)].map(x => x.trim().replace(/\/+$/, '')).filter(Boolean);
+  if (!o || !ok.includes(o)) return null;
+  return { 'Access-Control-Allow-Origin': o, 'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Max-Age': '86400', 'Vary': 'Origin' };
+}
+
 // CORS: açık uçlar (Mantar Pano: MP_ORIGIN, Zamanlayıcı: ZP_ORIGIN, ikisi de boşsa *) ve Mağaza sitesi (MARKET_ORIGIN); her yanıta (hatalar dahil) eklenir
 const isOpen = req => openOf(new URL(req.url).pathname.replace(/\/+$/, ''));
 
 export default {
   async fetch(req, env) {
-    const ch = corsHeaders(req, env, isOpen(req));
+    const ip = new URL(req.url).pathname.startsWith('/identity/'), ch = ip ? idCors(req, env) : corsHeaders(req, env, isOpen(req));
     try {
       const r = await route(req, env);
       return ch ? withCors(r, ch) : r;

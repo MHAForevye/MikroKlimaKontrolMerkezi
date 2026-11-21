@@ -5,7 +5,7 @@ compatibility_date = "2025-11-01"
 
 [assets]
 directory = "."                     # siteyi bu klasörden sunar (gizlenecekler .assetsignore'da)
-run_worker_first = ["/api/*"]       # sadece /api/* Worker'a gider, gerisi statik dosya
+run_worker_first = ["/api/*", "/identity/*"]   # sadece /api/* ve /identity/* Worker'a gider, gerisi statik dosya
 
 [[d1_databases]]
 binding = "DB"
@@ -18,6 +18,10 @@ database_id = "a4576ecf-eead-4f1a-9cbf-ae0f6f79ccc6"   # npx wrangler d1 create 
 # Panelden de verilebilir: Workers > mikroklimakontrolmerkezi > Settings > Variables.  Boşsa hesaplı uçlar kapalı kalır.
 [vars]
 MARKET_ORIGIN = "https://mhaforevye.github.io"
+# Nexus Pass ve (kristal hesabı kullanan) diğer Forevye siteleri de MARKET_ORIGIN listesine eklenir (virgülle, sadece alan adı). Örnek:
+#   MARKET_ORIGIN = "https://mhaforevye.github.io,https://KULLANICI.github.io"
+# FOREVYE ID arayüzünün adresi (e-posta/parola kimliği): ID_ORIGIN = "https://KULLANICI.github.io"
+# Gizli değerler (dosyaya yazma): wrangler secret put RESEND_API_KEY | NEXUS_SECRET ; ayrıca [vars] EMAIL_FROM = "FOREVYE ID <no-reply@alanadin.com>"
 
 # Zamanlayıcı uygulamasının adresi (isteğe bağlı, sadece alan adı; boşsa * ): ZP_ORIGIN = "https://KULLANICI.github.io"
 # İmzalı jeton için: npx wrangler secret put ZP_SIGN_KEY   (ayrıntı: ZAMANLAYICI-BAGLANTI.md)
