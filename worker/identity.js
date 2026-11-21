@@ -139,7 +139,9 @@ export function makeIdentity(c) {
     const code = code6();
     await env.DB.prepare('INSERT INTO id_codes(uid,kind,h,exp,tries) VALUES(?,?,?,?,0) ON CONFLICT(uid,kind) DO UPDATE SET h=excluded.h, exp=excluded.exp, tries=0')
       .bind(u.id, kind, await sha256hex(u.id + '|' + kind + '|' + code), Date.now() + ID_CFG.codeMin * 60e3).run();
-    await sendMail(env, u.email, subject, 'Doğrulama kodunuz: ' + code + ' (' + ID_CFG.codeMin + ' dakika geçerli, tek kullanımlık).');
+    const sent = await sendMail(env, u.email, subject, 'Doğrulama kodunuz: ' + code + ' (' + ID_CFG.codeMin + ' dakika geçerli, tek kullanımlık).');
+    // Kayıt doğrulaması sessizce başarısız olmasın (ör. Brevo'da doğrulanmamış EMAIL_FROM): kullanıcı hatayı görür.
+    if (!sent && kind === 'verify') throw new E('Doğrulama e-postası gönderilemedi. Birkaç dakika sonra "Kodu yeniden gönder"i deneyin; sürerse yöneticiye bildirin.', 'MAIL_UNAVAILABLE', 503);
   }
   async function checkCode(env, u, kind, code) {
     const p = await env.DB.prepare('SELECT h,exp,tries FROM id_codes WHERE uid=? AND kind=?').bind(u.id, kind).first();
