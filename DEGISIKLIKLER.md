@@ -1,3 +1,9 @@
+## Ortak servisler: posta ve altın fiyatı (Nexus'un yükünü alır)
+- `worker/mail.js`: tek Brevo/Resend gönderici. FOREVYE ID (`identity.js`) bunu kullanır; aynı modül Nexus için `POST /api/ext/mail` (HMAC imzalı, `NEXUS_SECRET`) ucunda da çalışır. Alıcı başına 10 dk'da 5, toplam 80 posta sınırı. Gizli anahtar/gönderen yalnızca burada (BREVO_API_KEY, EMAIL_FROM).
+- `GET /api/ext/gold`: altın fiyatı (gold-api, yedek Yahoo) 60 sn önbelleklenir (`ext_cache` tablosu ilk kullanımda kendiliğinden kurulur); kaynak çökerse 15 dk'ya kadar son fiyat `stale:true` ile döner. Nexus `GOLD_API_URL` ile buradan okur.
+- Testler: `tests/ext-services.test.mjs`.
+- Nexus girişi için `ID_REDIRECTS` içinde `sanal-banka=https://<nexus-adresi>/api/auth/id/callback` bulunmalı.
+
 ## Hediye kartı: tablo otomatik kurulur
 - `worker/index.js`: `gcards` tablosu veritabanında yoksa ilk kart isteğinde kendisi kurulur (`schema.sql`'i çalıştırmayı unutmak artık "Sunucu hatası" yapmaz). Testi: `tests/cards.test.mjs`.
 - `.assetsignore` adı düzeltildi (zip içinde `_.assetsignore` olmuştu).

@@ -615,6 +615,12 @@ async function route(req, env) {
     const raw = await req.text();
     return raw.length > 4000 ? json({ ok: false, error: 'invalid' }, 413) : NEX.extRedeem(req, env, raw);
   }
+  // Ortak servisler (Nexus'un yükünü alır): posta (imzalı) ve altın fiyatı (açık, 60 sn önbellekli)
+  if (path === '/api/ext/mail' && req.method === 'POST') {
+    const raw = await req.text();
+    return raw.length > 6000 ? json({ ok: false, error: 'invalid' }, 413) : NEX.extMail(req, env, raw);
+  }
+  if (path === '/api/ext/gold' && req.method === 'GET') return NEX.extGold(req, env);
   if (req.method !== 'POST') return fail('Sadece POST.', 405);
   const b = await body(req);
   if (b === null) return fail('İstek çok büyük.', 413);

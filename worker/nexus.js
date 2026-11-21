@@ -1,6 +1,8 @@
 /* Nexus Pass (kristalle üyelik) + Nexus bankası için sunucudan sunucuya hediye kartı bozdurma.
    index.js'ten `makeNexus(ctx)` ile bağlanır (ctx: ortak yardımcılar). Fiyatlar/süreler sadece NP bloğunda belirlenir. */
 
+import { sendMail } from './mail.js';
+
 export const NP = {
   // dur: saniye, price: kristal. Tarayıcının gönderdiği tutar HİÇ kullanılmaz.
   products: [
@@ -126,11 +128,17 @@ export function makeNexus(c) {
     return hex(await crypto.subtle.sign('HMAC', k, te.encode(msg)));
   }
   const xfail = (error, s) => json({ ok: false, error }, s);
-  async function extRedeem(req, env, raw) {
+  // Sunucudan sunucuya tüm uçlar aynı imzayı kullanır (hediye kartı, posta). Geçerliyse null, değilse hazır hata yanıtı döner.
+  async function signedOnly(req, env, raw) {
     if (!env.NEXUS_SECRET || env.NEXUS_SECRET.length < 16) return json({ ok: false, error: 'unavailable' }, 503);
     const ts = req.headers.get('x-nx-timestamp') || '', sig = req.headers.get('x-nx-signature') || '';
     if (!/^\d{10,16}$/.test(ts) || Math.abs(Date.now() - Number(ts)) > 5 * 60e3) return json({ ok: false, error: 'bad_signature' }, 401);
     if (!eq(await hmac(env.NEXUS_SECRET, ts + '.' + raw), sig)) return json({ ok: false, error: 'bad_signature' }, 401);
+    return null;
+  }
+  async function extRedeem(req, env, raw) {
+    const denied = await signedOnly(req, env, raw);
+    if (denied) return denied;
     let b; try { b = JSON.parse(raw); } catch (e) { return xfail('invalid', 400); }
     const uid = String(b.user_id || '');
     if (!/^[A-Za-z0-9_-]{8,64}$/.test(uid)) return xfail('invalid', 400);
@@ -159,5 +167,53 @@ export function makeNexus(c) {
     return json({ ok: true, amount: row.n, unit: 'kristal', reference: 'mkgc:' + no });
   }
 
-  return { handle, extRedeem };
+  /* ===== Ortak posta: Nexus (ve ileride diğer Forevye sunucuları) e-postayı kendi Brevo anahtarı olmadan buradan gönderir =====
+     POST /api/ext/mail  imza: giftcard ile aynı (x-nx-timestamp + x-nx-signature)   gövde: { to, subject, text }
+     200 { ok:true } · 4xx { ok:false, error:'invalid'|'rate_limited' } · 503 { ok:false, error:'unavailable' }
+     Alıcı başına 10 dakikada 5, toplamda 10 dakikada 80 posta (Brevo ücretsiz günlük 300 sınırını korur). */
+  async function extMail(req, env, raw) {
+    const denied = await signedOnly(req, env, raw);
+    if (denied) return denied;
+    let b; try { b = JSON.parse(raw); } catch (e) { return xfail('invalid', 400); }
+    const to = String(b.to || '').trim().toLowerCase(), subject = String(b.subject || '').trim(), text = String(b.text || '');
+    if (to.length > 254 || !/^[^\s@<>",;]{1,64}@[^\s@<>",;]{1,190}\.[^\s@<>",;]{2,}$/.test(to)) return xfail('invalid', 400);
+    if (!subject || subject.length > 150 || /[\r\n]/.test(subject) || !text || text.length > 2000) return xfail('invalid', 400);
+    await rlBump(env, 'xmail', to); await rlBump(env, 'xmailall', 'all');
+    if ((await rlCount(env, 'xmail', to)) > 5 || (await rlCount(env, 'xmailall', 'all')) > 80) return json({ ok: false, error: 'rate_limited' }, 429);
+    return (await sendMail(env, to, subject, text)) ? json({ ok: true }) : json({ ok: false, error: 'unavailable' }, 503);
+  }
+
+  /* ===== Altın fiyatı aktarımı: Nexus kristal fiyatını buradan alır; dış kaynağa (gold-api/Yahoo) yalnızca Mikro-Klima gider ve 60 sn önbellekler.
+     GET /api/ext/gold → { ok:true, price:<USD/ons>, source, at, stale? }. Herkese açık veridir, imza gerekmez. Kaynak çökerse 15 dk'ya kadar son fiyat 'stale' ile döner. */
+  // Tablo ilk kullanımda kendiliğinden kurulur (schema.sql'e dokunmadan çalışır); her istekte ek sorgu yapılmaz.
+  async function goldRow(env) {
+    const q = () => env.DB.prepare("SELECT v,t FROM ext_cache WHERE k='gold'").first();
+    try { return await q(); } catch (e) {
+      if (!/no such table/i.test(String(e && e.message || e))) throw e;
+      await env.DB.prepare('CREATE TABLE IF NOT EXISTS ext_cache(k TEXT PRIMARY KEY, v TEXT NOT NULL, t INTEGER NOT NULL)').run();
+      return q();
+    }
+  }
+  const pickPrice = j => { for (const x of [j && j.price, j && j.priceUsd, j && j.rate, j && j.ask, j && j.chart && j.chart.result && j.chart.result[0] && j.chart.result[0].meta && j.chart.result[0].meta.regularMarketPrice]) { const n = Number(x); if (Number.isFinite(n)) return n; } return NaN; };
+  async function extGold(req, env) {
+    const t = nowMs(), row = await goldRow(env);
+    const fresh = row && t - row.t < 60e3;
+    if (fresh) { const v = JSON.parse(row.v); return json({ ok: true, price: v.price, source: v.source, at: row.t }); }
+    const urls = [env.GOLD_UPSTREAM_1 || 'https://api.gold-api.com/price/XAU', env.GOLD_UPSTREAM_2 || 'https://query1.finance.yahoo.com/v8/finance/chart/GC=F?range=1d&interval=5m'];
+    for (const url of urls) {
+      try {
+        const r = await fetch(url, { headers: { accept: 'application/json', 'user-agent': 'forevye-mikro/1.0' }, signal: AbortSignal.timeout(4000) });
+        if (!r.ok) continue;
+        const price = pickPrice(await r.json());
+        if (!Number.isFinite(price) || price < 100 || price > 100000) continue;
+        const source = new URL(url).hostname;
+        await env.DB.prepare("INSERT INTO ext_cache(k,v,t) VALUES('gold',?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v, t=excluded.t").bind(JSON.stringify({ price, source }), t).run();
+        return json({ ok: true, price, source, at: t });
+      } catch (e) { /* sıradaki kaynak */ }
+    }
+    if (row && t - row.t < 15 * 60e3) { const v = JSON.parse(row.v); return json({ ok: true, price: v.price, source: v.source, at: row.t, stale: true }); }
+    return json({ ok: false, error: 'unavailable' }, 503);
+  }
+
+  return { handle, extRedeem, extMail, extGold };
 }

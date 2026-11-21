@@ -1,6 +1,7 @@
 /* FOREVYE ID servisi (Mikro-Klima Worker + D1 üzerinde). Arayüz: forevye-id (config.js → API_BASE = bu Worker).
    Kurallar forevye-id/api.js'teki demo arka uçla birebir aynıdır (kullanıcı adı, 48 saat/2 hak/15 gün, 24 saatlik fotoğraf, 2FA, oturumlar).
    Ortak yardımcılar index.js'ten `makeIdentity(ctx)` ile gelir. Tablolar: schema.sql (id_*). */
+import { sendMail as sendMailShared, mailReady } from './mail.js';
 
 const USERNAME_RE = /^#[A-Z0-9]{8,29}$/, EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const ID_CFG = {
@@ -92,24 +93,10 @@ class E extends Error { constructor(msg, code, status) { super(msg); this.code =
 export function makeIdentity(c) {
   const { json, sha256hex, eq, rlBump, rlCount } = c;
   const ok = o => json(o || { ok: true });
+  const sendMail = sendMailShared;
   const j = r => { try { return JSON.parse(r || 'null'); } catch (e) { return null; } };
 
-  // E-posta: BREVO_API_KEY varsa Brevo (ücretsiz 300/gün), yoksa Resend. Gönderen: EMAIL_FROM = "Ad <adres@...>" (Brevo'da doğrulanmış olmalı).
-  const parseFrom = f => { const m = /^\s*(.*?)\s*<([^>]+)>\s*$/.exec(String(f || '')); return m ? { name: m[1].replace(/^"|"$/g, '') || undefined, email: m[2] } : { email: String(f || '').trim() }; };
-  async function sendMail(env, to, subject, text) {
-    if (Array.isArray(env.__mail)) { env.__mail.push({ to, subject, text }); return true; }   // testler
-    if (!env.EMAIL_FROM || !(env.BREVO_API_KEY || env.RESEND_API_KEY)) { console.log('[id-mail:kapalı]', subject); return false; }
-    try {
-      if (env.BREVO_API_KEY) {
-        const r = await fetch('https://api.brevo.com/v3/smtp/email', { method: 'POST', headers: { 'api-key': env.BREVO_API_KEY, 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify({ sender: parseFrom(env.EMAIL_FROM), to: [{ email: to }], subject, textContent: text }) });
-        if (!r.ok) console.log('[id-mail:brevo]', r.status, (await r.text().catch(() => '')).slice(0, 200));
-        return r.ok;
-      }
-      const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: 'Bearer ' + env.RESEND_API_KEY, 'content-type': 'application/json' }, body: JSON.stringify({ from: env.EMAIL_FROM, to: [to], subject, text }) });
-      return r.ok;
-    } catch (e) { return false; }
-  }
-  const mailReady = env => Array.isArray(env.__mail) || Boolean(env.EMAIL_FROM && (env.BREVO_API_KEY || env.RESEND_API_KEY));
+  // E-posta: ortak posta modülü (worker/mail.js). Nexus de aynı modülü /api/ext/mail ile kullanır.
   async function limit(env, name, who, max, msg) {
     await rlBump(env, name, who);
     if ((await rlCount(env, name, who)) > max) throw new E(msg || 'Çok fazla deneme. Biraz bekleyip tekrar deneyin.', 'RATE_LIMIT', 429);
