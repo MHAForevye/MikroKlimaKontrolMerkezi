@@ -140,3 +140,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS np_idem ON np_purchases(uid, idem);
 CREATE INDEX IF NOT EXISTS np_uid ON np_purchases(uid, at);
 CREATE TABLE IF NOT EXISTS np_ents (id TEXT PRIMARY KEY, uid TEXT NOT NULL, pid TEXT NOT NULL, starts INTEGER NOT NULL, expires INTEGER NOT NULL, purchase_id TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS np_ents_uid ON np_ents(uid, pid);
+
+-- Google ile giriş, uygulama girişi (FOREVYE ID ile giriş) ve Nexus Pass ↔ ID hesap bağı
+CREATE TABLE IF NOT EXISTS id_google (sub TEXT PRIMARY KEY, uid TEXT NOT NULL UNIQUE, email TEXT NOT NULL, nopw INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS id_authcodes (h TEXT PRIMARY KEY, uid TEXT NOT NULL, app TEXT NOT NULL, redirect TEXT NOT NULL, challenge TEXT NOT NULL, exp INTEGER NOT NULL, used INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS id_authcodes_uid ON id_authcodes(uid);
+CREATE TABLE IF NOT EXISTS id_app_sessions (
+  id TEXT PRIMARY KEY, uid TEXT NOT NULL, app TEXT NOT NULL, a_hash TEXT NOT NULL, r_hash TEXT NOT NULL,
+  a_exp INTEGER NOT NULL, r_exp INTEGER NOT NULL, created INTEGER NOT NULL, last INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS id_app_sessions_uid ON id_app_sessions(uid);
+CREATE INDEX IF NOT EXISTS id_app_sessions_a ON id_app_sessions(a_hash);
+CREATE INDEX IF NOT EXISTS id_app_sessions_r ON id_app_sessions(r_hash);
+CREATE TABLE IF NOT EXISTS np_links (uid TEXT PRIMARY KEY, site_id TEXT NOT NULL UNIQUE, at INTEGER NOT NULL);

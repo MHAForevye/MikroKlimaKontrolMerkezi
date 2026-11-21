@@ -78,10 +78,34 @@ export function makeNexus(c) {
     return json({ ok: true, purchase: purOut(pur), entitlement: { id: eid, pid: p.id, status: 'active', starts: t, expires: t + p.dur * 1000, purchaseId: id } });
   }
 
+  /* Kimlik: ya doğrudan kristal hesabı (ID.ANAHTAR) ya da FOREVYE ID ile girişte uygulamaya özel jeton + bağlı kristal hesabı (np_links) */
+  const PAIR = /^Bearer \d{8}\./;
+  async function link(env, req, b, a) {
+    await rlBump(env, 'nplink', a.uid);
+    if ((await rlCount(env, 'nplink', a.uid)) > CFG.redeemPer10m) return tooMany();
+    const m = /^(\d{8})\.([A-Za-z0-9_-]{20,64})$/.exec(String(b.hesap || '').trim());
+    const su = m && await auth(new Request('https://x/', { headers: { Authorization: 'Bearer ' + m[1] + '.' + m[2] } }), env);
+    if (!su) return fail('Kristal hesabı bilgisi geçersiz.', 400);
+    if (await env.DB.prepare('SELECT 1 AS x FROM np_links WHERE uid=?').bind(a.uid).first()) return fail('Zaten bir kristal hesabı bağlı. Önce ayır.', 409);
+    try { await env.DB.prepare('INSERT INTO np_links(uid,site_id,at) VALUES(?,?,?)').bind(a.uid, su.id, nowMs()).run(); }
+    catch (e) { return fail('Bu kristal hesabı başka bir FOREVYE ID hesabına bağlı.', 409); }
+    return json({ ok: 1, linked: true });
+  }
   async function handle(path, req, env, b) {
     if (path === '/api/npass/products') return products();
     if (path === '/api/npass/product') return product(b);
-    const u = await auth(req, env);
+    let u = null;
+    if (PAIR.test(req.headers.get('Authorization') || '')) u = await auth(req, env);
+    else {
+      const a = await c.appAuth(env, req, 'nexus-pass');
+      if (!a) return fail('Oturum geçersiz.', 401);
+      if (path === '/api/npass/link/status') { const l = await env.DB.prepare('SELECT site_id FROM np_links WHERE uid=?').bind(a.uid).first(); return json({ ok: 1, linked: !!l, siteId: l ? l.site_id : null }); }
+      if (path === '/api/npass/link') return link(env, req, b, a);
+      if (path === '/api/npass/unlink') { await env.DB.prepare('DELETE FROM np_links WHERE uid=?').bind(a.uid).run(); return json({ ok: 1, linked: false }); }
+      const l = await env.DB.prepare('SELECT site_id FROM np_links WHERE uid=?').bind(a.uid).first();
+      if (!l) return json({ ok: false, code: 'no_crystal_account' }, 409);
+      u = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(l.site_id).first();
+    }
     if (!u) return fail('Oturum geçersiz.', 401);
     switch (path) {
       case '/api/npass/me': return me(env, u);

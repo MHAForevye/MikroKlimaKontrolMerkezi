@@ -656,7 +656,7 @@ async function route(req, env) {
 }
 
 /* ===== Modüller (Nexus Pass, Nexus hediye kartı, FOREVYE ID) ===== */
-const CTX = { json, fail, sha256hex, rndStr, eq, nowSec, addLog, rlBump, rlCount, tooMany, toInt, auth, AB, CFG, stamp, cardOk, ensureCards };
+const CTX = { appAuth: (...a) => IDENT.appAuth(...a), json, fail, sha256hex, rndStr, eq, nowSec, addLog, rlBump, rlCount, tooMany, toInt, auth, AB, CFG, stamp, cardOk, ensureCards };
 const NEX = makeNexus(CTX), IDENT = makeIdentity(CTX);
 /* FOREVYE ID'ye erişebilen adresler: ID_ORIGIN (virgülle) + MARKET_ORIGIN. Hiçbiri yoksa tarayıcıdan okunamaz. Çerez yok, kimlik Authorization başlığında. */
 function idCors(req, env) {

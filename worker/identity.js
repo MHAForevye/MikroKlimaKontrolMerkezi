@@ -59,6 +59,34 @@ function device(ua) {
   const br = /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'Tarayıcı';
   return { type: /Mobi|Android|iPhone/.test(ua) ? 'Mobil' : 'Masaüstü', label: br + ' · ' + os };
 }
+const b64u = bytes => { let t = ''; new Uint8Array(bytes).forEach(x => { t += String.fromCharCode(x); }); return btoa(t).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+const unb64u = str => Uint8Array.from(atob(str.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(str.length / 4) * 4, '=')), ch => ch.charCodeAt(0));
+let GJ = { at: 0, keys: null };
+async function googleKeys(force) {
+  if (!force && GJ.keys && Date.now() - GJ.at < 3600e3) return GJ.keys;
+  const r = await fetch('https://www.googleapis.com/oauth2/v3/certs');
+  if (!r.ok) throw new E('Google doğrulama anahtarları alınamadı.', 'GOOGLE_UNAVAILABLE', 503);
+  GJ = { at: Date.now(), keys: (await r.json()).keys || [] };
+  return GJ.keys;
+}
+/* Google kimlik jetonunu (JWT) doğrular: imza (RS256), yayıncı, hedef (client id), süre, e-posta doğrulanmış mı */
+async function verifyGoogle(env, cred) {
+  if (!env.GOOGLE_CLIENT_ID) throw new E('Google ile giriş bu sunucuda ayarlı değil.', 'GOOGLE_UNAVAILABLE', 503);
+  const bad = () => new E('Google doğrulaması başarısız.', 'GOOGLE_INVALID', 401);
+  const parts = String(cred || '').split('.');
+  if (parts.length !== 3 || String(cred).length > 4096) throw bad();
+  let head, pay;
+  try { head = JSON.parse(new TextDecoder().decode(unb64u(parts[0]))); pay = JSON.parse(new TextDecoder().decode(unb64u(parts[1]))); } catch (e) { throw bad(); }
+  if (head.alg !== 'RS256' || !head.kid) throw bad();
+  let key = (await googleKeys(false)).find(k => k.kid === head.kid);
+  if (!key) key = (await googleKeys(true)).find(k => k.kid === head.kid);
+  if (!key) throw bad();
+  const ck = await crypto.subtle.importKey('jwk', key, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+  if (!(await crypto.subtle.verify('RSASSA-PKCS1-v1_5', ck, unb64u(parts[2]), te.encode(parts[0] + '.' + parts[1])))) throw bad();
+  if (!['https://accounts.google.com', 'accounts.google.com'].includes(pay.iss) || pay.aud !== env.GOOGLE_CLIENT_ID || !(pay.exp * 1000 > Date.now()) || !pay.sub) throw bad();
+  if (!(pay.email_verified === true || pay.email_verified === 'true') || !EMAIL_RE.test(String(pay.email || ''))) throw new E('Google hesabınızın e-postası doğrulanmamış.', 'GOOGLE_INVALID', 401);
+  return { sub: String(pay.sub), email: String(pay.email).toLowerCase() };
+}
 class E extends Error { constructor(msg, code, status) { super(msg); this.code = code; this.status = status || 400; } }
 
 export function makeIdentity(c) {
@@ -147,6 +175,7 @@ export function makeIdentity(c) {
     return { s, u };
   }
   const revokeAll = (env, uid) => env.DB.prepare('UPDATE id_sessions SET revoked=1 WHERE uid=?').bind(uid).run();
+  const revokeApps = (env, uid, app) => app ? env.DB.prepare('UPDATE id_app_sessions SET revoked=1 WHERE uid=? AND app=?').bind(uid, app).run() : env.DB.prepare('UPDATE id_app_sessions SET revoked=1 WHERE uid=?').bind(uid).run();
   async function pwOk(env, u, pw) { return eq(await hashPw(String(pw || ''), u.salt), u.hash); }
   const dummySalt = '00'.repeat(16);
 
@@ -214,7 +243,7 @@ export function makeIdentity(c) {
       return ok({ accessToken: at, refreshToken: nrt });
     },
     async logout(env, req) { const { s, u } = await need(env, req); await env.DB.prepare('UPDATE id_sessions SET revoked=1 WHERE id=?').bind(s.id).run(); await event(env, u.id, 'logout'); return ok(); },
-    async logoutAll(env, req) { const { u } = await need(env, req); await revokeAll(env, u.id); await event(env, u.id, 'logout_all'); return ok(); },
+    async logoutAll(env, req) { const { u } = await need(env, req); await revokeAll(env, u.id); await revokeApps(env, u.id); await event(env, u.id, 'logout_all'); return ok(); },
     async forgot(env, req, b) {
       const u = await byEmail(env, b.email);
       if (u && u.verified) { await limit(env, 'idfg', u.id, 3, 'Çok sık istek. Biraz bekleyin.'); await sendCode(env, u, 'reset', 'FOREVYE ID parola sıfırlama'); }
@@ -226,7 +255,7 @@ export function makeIdentity(c) {
       await checkCode(env, u, 'reset', b.code);
       const salt = rndHex(16);
       await env.DB.prepare('UPDATE id_users SET salt=?, hash=? WHERE id=?').bind(salt, await hashPw(b.password, salt), u.id).run();
-      await revokeAll(env, u.id); await event(env, u.id, 'password_reset');
+      await revokeAll(env, u.id); await revokeApps(env, u.id); await env.DB.prepare('UPDATE id_google SET nopw=0 WHERE uid=?').bind(u.id).run(); await event(env, u.id, 'password_reset');
       await sendMail(env, u.email, 'Parolanız değiştirildi', 'FOREVYE ID parolanız sıfırlandı ve tüm oturumlar kapatıldı.');
       return ok();
     },
@@ -304,7 +333,7 @@ export function makeIdentity(c) {
         if (n.length > 32) throw new E('Görünen ad en fazla 32 karakter olabilir.', 'VALIDATION');
         x.displayName = n;
       } else if (method === 'POST') x.connected = true;
-      else { x.connected = false; await event(env, u.id, 'app_disconnected', id); }
+      else { x.connected = false; await revokeApps(env, u.id, id); await event(env, u.id, 'app_disconnected', id); }
       await env.DB.prepare('UPDATE id_users SET apps=? WHERE id=?').bind(JSON.stringify(m), u.id).run();
       return ok();
     },
@@ -338,16 +367,137 @@ export function makeIdentity(c) {
     },
     async googleUnlink(env, req) {
       const { u } = await need(env, req);
-      await env.DB.prepare('UPDATE id_users SET google=NULL WHERE id=?').bind(u.id).run(); await event(env, u.id, 'google_unlinked');
+      const g = await env.DB.prepare('SELECT nopw FROM id_google WHERE uid=?').bind(u.id).first();
+      if (g && g.nopw) throw new E('Bu hesabın parolası yok; Google bağlantısını kaldırmadan önce “Şifremi unuttum” ile bir parola belirleyin.', 'NEEDS_PASSWORD', 409);
+      await env.DB.batch([env.DB.prepare('DELETE FROM id_google WHERE uid=?').bind(u.id), env.DB.prepare('UPDATE id_users SET google=NULL WHERE id=?').bind(u.id)]); await event(env, u.id, 'google_unlinked');
       return json(publicUser({ ...u, google: null }, new URL(req.url).origin));
     },
     async deleteAccount(env, req, b) {
       const { u } = await need(env, req);
-      if (!(await pwOk(env, u, b.password)) && !u.google) throw new E('Parola hatalı.', 'BAD_CREDENTIALS', 401);
-      await env.DB.batch(['id_sessions', 'id_codes', 'id_chal', 'id_events', 'id_photos'].map(t => env.DB.prepare('DELETE FROM ' + t + ' WHERE uid=?').bind(u.id)).concat(env.DB.prepare('DELETE FROM id_users WHERE id=?').bind(u.id)));
+      const g = await env.DB.prepare('SELECT nopw FROM id_google WHERE uid=?').bind(u.id).first();
+      if (!(g && g.nopw) && !(await pwOk(env, u, b.password))) throw new E('Parola hatalı.', 'BAD_CREDENTIALS', 401);   // parolası olmayan (yalnız Google) hesap oturumla silinebilir
+      await env.DB.batch(['id_sessions', 'id_app_sessions', 'id_authcodes', 'id_codes', 'id_chal', 'id_events', 'id_photos', 'id_google', 'np_links'].map(t => env.DB.prepare('DELETE FROM ' + t + ' WHERE uid=?').bind(u.id)).concat(env.DB.prepare('DELETE FROM id_users WHERE id=?').bind(u.id)));
       return ok({ ok: true, googleLinkRemoved: !!b.unlinkGoogle });
     }
   };
+
+  /* ===== Google ile giriş / bağlama ===== */
+  async function challenge(env, u) {
+    const ch = b64(rnd(24));
+    await env.DB.prepare('INSERT INTO id_chal(id,uid,exp,tries) VALUES(?,?,?,0)').bind(await sha256hex(ch), u.id, Date.now() + 5 * 60e3).run();
+    if (u.tf_method === 'email') await sendCode(env, u, 'login2fa', 'FOREVYE ID giriş kodu');
+    return ok({ twoFactorRequired: true, method: u.tf_method, challengeId: ch, email: u.email });
+  }
+  H_.googleLogin = async (env, req, b) => {
+    await limit(env, 'idgg', req.headers.get('CF-Connecting-IP') || 'x', 40);
+    const g = await verifyGoogle(env, b.credential);
+    let u, link = await env.DB.prepare('SELECT * FROM id_google WHERE sub=?').bind(g.sub).first();
+    if (link) u = await env.DB.prepare('SELECT * FROM id_users WHERE id=?').bind(link.uid).first();
+    if (!u) {
+      u = await byEmail(env, g.email);
+      if (u) {
+        // Aynı e-posta ile kayıtlı hesap: Google e-postayı kanıtladı. Doğrulanmamış (ele geçirilmiş olabilecek) hesapta eski parola geçersiz kılınır.
+        let nopw = 0;
+        if (!u.verified) { const salt = rndHex(16); await env.DB.prepare('UPDATE id_users SET salt=?, hash=?, verified=1 WHERE id=?').bind(salt, await hashPw(rndHex(24), salt), u.id).run(); await revokeAll(env, u.id); await revokeApps(env, u.id); nopw = 1; u = await env.DB.prepare('SELECT * FROM id_users WHERE id=?').bind(u.id).first(); }
+        if (await env.DB.prepare('SELECT 1 AS x FROM id_google WHERE uid=?').bind(u.id).first()) throw new E('Bu hesaba başka bir Google hesabı bağlı.', 'GOOGLE_CONFLICT', 409);
+        await env.DB.batch([env.DB.prepare('INSERT INTO id_google(sub,uid,email,nopw) VALUES(?,?,?,?)').bind(g.sub, u.id, g.email, nopw), env.DB.prepare('UPDATE id_users SET google=? WHERE id=?').bind(g.email, u.id)]);
+        await event(env, u.id, 'google_linked', 'giriş sırasında');
+      } else {
+        const id = 'usr_' + rndHex(8), salt = rndHex(16), apps = {}; ID_CFG.apps.forEach(a => { apps[a.id] = { connected: true, displayName: '' }; });
+        await env.DB.batch([
+          env.DB.prepare('INSERT INTO id_users(id,email,salt,hash,verified,created,google,apps) VALUES(?,?,?,?,1,?,?,?)').bind(id, g.email, salt, await hashPw(rndHex(24), salt), Date.now(), g.email, JSON.stringify(apps)),
+          env.DB.prepare('INSERT INTO id_google(sub,uid,email,nopw) VALUES(?,?,?,1)').bind(g.sub, id, g.email)]);
+        await event(env, id, 'register', 'Google');
+        u = await env.DB.prepare('SELECT * FROM id_users WHERE id=?').bind(id).first();
+      }
+    }
+    if (u.tf_method) return challenge(env, u);
+    return ok(await newSession(env, req, u, 'Google'));
+  };
+  H_.googleLink = async (env, req, b) => {
+    const { u } = await need(env, req);
+    await limit(env, 'idgl', u.id, 10);
+    const g = await verifyGoogle(env, b.credential);
+    if (await env.DB.prepare('SELECT 1 AS x FROM id_google WHERE uid=?').bind(u.id).first()) throw new E('Hesabınıza zaten bir Google hesabı bağlı.', 'GOOGLE_CONFLICT', 409);
+    if (await env.DB.prepare('SELECT 1 AS x FROM id_google WHERE sub=?').bind(g.sub).first()) throw new E('Bu Google hesabı başka bir FOREVYE ID hesabına bağlı.', 'GOOGLE_CONFLICT', 409);
+    await env.DB.batch([env.DB.prepare('INSERT INTO id_google(sub,uid,email,nopw) VALUES(?,?,?,0)').bind(g.sub, u.id, g.email), env.DB.prepare('UPDATE id_users SET google=? WHERE id=?').bind(g.email, u.id)]);
+    await event(env, u.id, 'google_linked');
+    return json(publicUser(await env.DB.prepare('SELECT * FROM id_users WHERE id=?').bind(u.id).first(), new URL(req.url).origin));
+  };
+
+  /* ===== Uygulama girişi: "FOREVYE ID ile giriş" (yetkilendirme kodu + PKCE) =====
+     1) Uygulama kullanıcıyı ID sitesine yollar:  <ID>/#/baglan?app=..&redirect=..&state=..&challenge=BASE64URL(SHA256(verifier))
+     2) ID sitesi (oturum açıkken) POST /identity/authorize → tek kullanımlık kod (60 sn) → tarayıcı redirect?code=..&state=.. adresine döner
+     3) Uygulama POST /identity/token/exchange {code, verifier, app, redirect, tokens?} → kullanıcı kimliği (+ isteğe bağlı uygulamaya özel jetonlar)
+     redirect adresleri yalnızca ID_REDIRECTS içinde (app=adres, virgülle) tam eşleşirse kabul edilir. */
+  const redirectsOf = (env, app) => String(env.ID_REDIRECTS || '').split(',').map(x => x.trim()).filter(Boolean).map(x => { const i = x.indexOf('='); return [x.slice(0, i), x.slice(i + 1)]; }).filter(x => x[0] === app).map(x => x[1]);
+  function checkApp(env, b) {
+    const a = ID_CFG.apps.find(x => x.id === b.app);
+    if (!a) throw new E('Bilinmeyen uygulama.', 'BAD_APP', 400);
+    if (!redirectsOf(env, a.id).includes(String(b.redirect || ''))) throw new E('Bu uygulama için yönlendirme adresi izinli değil.', 'BAD_REDIRECT', 400);
+    return a;
+  }
+  H_.authorizeInfo = async (env, req, b) => {
+    const { u } = await need(env, req), a = checkApp(env, b), m = j(u.apps) || {};
+    return ok({ app: { id: a.id, name: a.name, scopes: a.scopes }, connected: !!(m[a.id] && m[a.id].connected), email: u.email });
+  };
+  H_.authorize = async (env, req, b) => {
+    const { u } = await need(env, req), a = checkApp(env, b);
+    if (!/^[A-Za-z0-9_-]{43}$/.test(String(b.challenge || ''))) throw new E('Geçersiz PKCE değeri.', 'VALIDATION');
+    const state = String(b.state || ''); if (!/^[A-Za-z0-9._~-]{8,200}$/.test(state)) throw new E('Geçersiz state.', 'VALIDATION');
+    await limit(env, 'idaz', u.id, 30);
+    const m = j(u.apps) || {}; m[a.id] = Object.assign({ displayName: '' }, m[a.id], { connected: true });
+    const code = b64(rnd(32));
+    await env.DB.batch([
+      env.DB.prepare('UPDATE id_users SET apps=? WHERE id=?').bind(JSON.stringify(m), u.id),
+      env.DB.prepare('INSERT INTO id_authcodes(h,uid,app,redirect,challenge,exp,used) VALUES(?,?,?,?,?,?,0)').bind(await sha256hex('ac|' + code), u.id, a.id, b.redirect, b.challenge, Date.now() + 60e3)]);
+    await event(env, u.id, 'app_authorized', a.id);
+    return ok({ redirect: b.redirect + (String(b.redirect).includes('?') ? '&' : '?') + 'code=' + code + '&state=' + state });
+  };
+  async function newAppSession(env, uid, app) {
+    const at = b64(rnd(32)), rt = b64(rnd(32)), now = Date.now();
+    await env.DB.prepare('INSERT INTO id_app_sessions(id,uid,app,a_hash,r_hash,a_exp,r_exp,created,last) VALUES(?,?,?,?,?,?,?,?,?)')
+      .bind(rndHex(12), uid, app, await sha256hex(at), await sha256hex(rt), now + ID_CFG.accessMin * 60e3, now + ID_CFG.refreshDays * D, now, now).run();
+    return { accessToken: at, refreshToken: rt };
+  }
+  H_.exchange = async (env, req, b) => {
+    await limit(env, 'idex', req.headers.get('CF-Connecting-IP') || 'x', 120);
+    const bad = () => new E('Kod geçersiz veya süresi dolmuş.', 'CODE_INVALID', 400);
+    const code = String(b.code || ''), ver = String(b.verifier || '');
+    if (!/^[A-Za-z0-9_-]{30,64}$/.test(code) || !/^[A-Za-z0-9._~-]{43,128}$/.test(ver)) throw bad();
+    const h = await sha256hex('ac|' + code), r = await env.DB.prepare('SELECT * FROM id_authcodes WHERE h=? AND used=0 AND exp>?').bind(h, Date.now()).first();
+    if (!r || r.app !== b.app || r.redirect !== b.redirect) throw bad();
+    if (!eq(b64u(await crypto.subtle.digest('SHA-256', te.encode(ver))), r.challenge)) throw bad();
+    if (!(await env.DB.prepare('UPDATE id_authcodes SET used=1 WHERE h=? AND used=0').bind(h).run()).meta.changes) throw bad();   // tek kullanım
+    const u = await env.DB.prepare('SELECT * FROM id_users WHERE id=?').bind(r.uid).first(); if (!u) throw bad();
+    const out = { user: { userId: u.id, email: u.email, emailVerified: !!u.verified, username: u.username || null } };
+    if (b.tokens !== false) Object.assign(out, await newAppSession(env, u.id, r.app));
+    return ok(out);
+  };
+  H_.appRefresh = async (env, req, b) => {
+    const rt = String(b.refreshToken || ''), bad = () => new E('Oturum geçersiz.', 'UNAUTHORIZED', 401);
+    if (!/^[A-Za-z0-9_-]{30,64}$/.test(rt)) throw bad();
+    const s = await env.DB.prepare('SELECT * FROM id_app_sessions WHERE r_hash=? AND revoked=0 AND r_exp>?').bind(await sha256hex(rt), Date.now()).first();
+    if (!s) throw bad();
+    const u = await env.DB.prepare('SELECT apps FROM id_users WHERE id=?').bind(s.uid).first(), m = u && j(u.apps) || {};
+    if (!(m[s.app] && m[s.app].connected)) throw bad();
+    const at = b64(rnd(32)), nrt = b64(rnd(32));
+    await env.DB.prepare('UPDATE id_app_sessions SET a_hash=?, r_hash=?, a_exp=?, r_exp=?, last=? WHERE id=?').bind(await sha256hex(at), await sha256hex(nrt), Date.now() + ID_CFG.accessMin * 60e3, Date.now() + ID_CFG.refreshDays * D, Date.now(), s.id).run();
+    return ok({ accessToken: at, refreshToken: nrt });
+  };
+  H_.appRevoke = async (env, req, b) => {
+    const rt = String(b.refreshToken || '');
+    if (/^[A-Za-z0-9_-]{30,64}$/.test(rt)) await env.DB.prepare('UPDATE id_app_sessions SET revoked=1 WHERE r_hash=?').bind(await sha256hex(rt)).run();
+    return ok();
+  };
+  /* Diğer modüller (Nexus Pass) için: uygulamaya özel erişim jetonu → { uid } */
+  async function appAuth(env, req, app) {
+    const m = /^Bearer ([A-Za-z0-9_-]{30,64})$/.exec(req.headers.get('Authorization') || ''); if (!m) return null;
+    const s = await env.DB.prepare('SELECT uid FROM id_app_sessions WHERE a_hash=? AND app=? AND revoked=0 AND a_exp>?').bind(await sha256hex(m[1]), app, Date.now()).first();
+    if (!s) return null;
+    const u = await env.DB.prepare('SELECT apps FROM id_users WHERE id=?').bind(s.uid).first(), ap = u && j(u.apps) || {};
+    return ap[app] && ap[app].connected ? { uid: s.uid } : null;
+  }
 
   /* yönlendirme: [yöntem, yol] */
   async function handle(req, env, path, b) {
@@ -359,6 +509,13 @@ export function makeIdentity(c) {
       if ((r = /^\/identity\/apps\/([a-z0-9-]{1,40})$/.exec(path)) && ['PATCH', 'POST', 'DELETE'].includes(m)) return await H_.appEdit(env, req, r[1], m, b);
       const key = m + ' ' + path;
       switch (key) {
+        case 'POST /identity/oauth/google': return await H_.googleLogin(env, req, b);
+        case 'POST /identity/oauth/google/link': return await H_.googleLink(env, req, b);
+        case 'POST /identity/authorize/info': return await H_.authorizeInfo(env, req, b);
+        case 'POST /identity/authorize': return await H_.authorize(env, req, b);
+        case 'POST /identity/token/exchange': return await H_.exchange(env, req, b);
+        case 'POST /identity/app/refresh': return await H_.appRefresh(env, req, b);
+        case 'POST /identity/app/revoke': return await H_.appRevoke(env, req, b);
         case 'POST /identity/register': return await H_.register(env, req, b);
         case 'POST /identity/email/verify': return await H_.verifyEmail(env, req, b);
         case 'POST /identity/email/resend': return await H_.resend(env, req, b);
@@ -386,5 +543,5 @@ export function makeIdentity(c) {
       throw e;
     }
   }
-  return { handle };
+  return { handle, appAuth };
 }
