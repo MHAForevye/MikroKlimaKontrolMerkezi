@@ -630,21 +630,14 @@ async function route(req, env) {
 
   if (path.startsWith('/api/npass/')) return NEX.handle(path, req, env, b);
   if (path.startsWith('/api/timer-reward/')) {
-    // Öncelik FOREVYE ID uygulama oturumu. Nexus Pass ile zaten eşlenmiş
-    // Kristal hesabını aynı ID kullanıcı kimliğinden otomatik devralır.
+    // Tek kimlik kaynağı FOREVYE ID'dir. Ödül hesabı doğrudan Nexus Banka'nın
+    // id_links -> crystal_holdings tablolarına bağlanır; yedek anahtar/np_links kullanılmaz.
     const appSession = await IDENT.appAuth(env, req, 'zamanlayici');
-    if (appSession) {
-      const link = await env.DB.prepare('SELECT site_id FROM np_links WHERE uid=?').bind(appSession.uid).first();
-      if (!link) return fail('Bu FOREVYE ID hesabına henüz Kristal hesabı bağlanmamış. Nexus Pass içinde kullandığın aynı FOREVYE ID hesabıyla giriş yapıp mevcut Kristal hesabı bağlantını kontrol et.', 409, { code: 'no_crystal_account' });
-      const crystalUser = await env.DB.prepare('SELECT id FROM users WHERE id=?').bind(link.site_id).first();
-      if (!crystalUser) return fail('FOREVYE ID hesabının Kristal hesabı bağlantısı bulundu ancak hesap kaydı erişilebilir değil. Bakiye verisi korunarak destek kontrolü gerekiyor.', 409, { code: 'crystal_account_unavailable' });
-      return TIMER_REWARDS.handle(path, req, env, crystalUser.id, b);
-    }
-    // Eski istemci oturumları geriye dönük uyum için bir süre desteklenir;
-    // yeni arayüz hiçbir yerde bu yedek anahtarı istemez.
-    const u = await auth(req, env);
-    if (!u) return fail('FOREVYE ID oturumu geçersiz veya süresi dolmuş. Yeniden giriş yap.', 401, { code: 'id_session_required' });
-    return TIMER_REWARDS.handle(path, req, env, u.id, b);
+    if (!appSession) return fail('FOREVYE ID oturumu geçersiz veya süresi dolmuş. Yeniden giriş yap.', 401, { code: 'id_session_required' });
+    const idUser = await env.DB.prepare('SELECT id,email,verified FROM id_users WHERE id=?').bind(appSession.uid).first();
+    if (!idUser || !idUser.verified || !idUser.email) return fail('FOREVYE ID e-posta doğrulaması gerekli.', 403, { code: 'id_email_unverified' });
+    const identity = { idUserId: idUser.id, email: idUser.email, emailVerified: true };
+    return TIMER_REWARDS.handle(path, req, env, appSession.uid, b, identity);
   }
   if (path === '/api/init') return init(req, env);
   if (path.startsWith('/api/admin/')) {
