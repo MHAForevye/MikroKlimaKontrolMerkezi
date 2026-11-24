@@ -18,8 +18,9 @@ database_id = "a4576ecf-eead-4f1a-9cbf-ae0f6f79ccc6"   # npx wrangler d1 create 
 # Panelden de verilebilir: Workers > mikroklimakontrolmerkezi > Settings > Variables.  Boşsa hesaplı uçlar kapalı kalır.
 [vars]
 EMAIL_FROM = "FOREVYE ID <SENIN-DOGRULANMIS-ADRESIN@gmail.com>"   # Brevo > Senders bölümünde doğrulanmış adres
-MARKET_ORIGIN = "https://mhaforevye.github.io"
-# Nexus Pass ve (kristal hesabı kullanan) diğer Forevye siteleri de MARKET_ORIGIN listesine eklenir (virgülle, sadece alan adı). Örnek:
+MARKET_ORIGIN = "https://mhaforevye.github.io,https://frovyes.github.io"
+ZP_ORIGIN = "https://frovyes.github.io"
+# Nexus Pass, Zamanlayıcı ve kristal hesabı kullanan diğer Forevye siteleri MARKET_ORIGIN listesine eklenir (virgülle, sadece alan adı). Timer ödül API CORS erişimi için https://frovyes.github.io da gereklidir. Örnek:
 #   MARKET_ORIGIN = "https://mhaforevye.github.io,https://KULLANICI.github.io"
 # FOREVYE ID arayüzünün adresi (e-posta/parola kimliği): ID_ORIGIN = "https://KULLANICI.github.io"
 # Google ile giriş: GOOGLE_CLIENT_ID = "....apps.googleusercontent.com" (herkese açık değer; Google Cloud → OAuth istemcisi, yetkili JavaScript kaynağı = ID sitesi)
@@ -28,5 +29,5 @@ MARKET_ORIGIN = "https://mhaforevye.github.io"
 # Ortak posta (ID + Nexus aynı Brevo hesabını buradan kullanır; Nexus /api/ext/mail ile ister) ve altın fiyatı aktarımı (/api/ext/gold) bu Worker'dadır.
 # Gizli değerler (dosyaya yazma): wrangler secret put BREVO_API_KEY (ya da RESEND_API_KEY) | NEXUS_SECRET (= Nexus'taki GIFTCARD_API_SECRET) ; ayrıca [vars] EMAIL_FROM = "FOREVYE ID <no-reply@alanadin.com>"
 
-# Zamanlayıcı uygulamasının adresi (isteğe bağlı, sadece alan adı; boşsa * ): ZP_ORIGIN = "https://KULLANICI.github.io"
+# Zamanlayıcı uygulamasının adresi (https://frovyes.github.io); gerçek adres değişirse burayı güncelle.
 # İmzalı jeton için: npx wrangler secret put ZP_SIGN_KEY   (ayrıntı: ZAMANLAYICI-BAGLANTI.md)

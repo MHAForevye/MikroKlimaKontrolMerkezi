@@ -4,6 +4,7 @@
 
 import { makeNexus } from './nexus.js';
 import { makeIdentity } from './identity.js';
+import { makeTimerRewards } from './timer-rewards.js';
 
 const CFG = {
   daily: 30,
@@ -444,7 +445,8 @@ const marketOrigins = env => String(env.MARKET_ORIGIN || '').split(',').map(x =>
 function corsHeaders(req, env, spec) {
   const o = req.headers.get('Origin') || '';
   if (spec) return corsOf(env, spec, o);
-  return o && marketOrigins(env).includes(o) ? Object.assign({}, corsOf(env, null, o), { 'Access-Control-Allow-Origin': o }) : null;
+  const allowed = [...marketOrigins(env), ...String(env.ZP_ORIGIN || '').split(',').map(x => x.trim().replace(/\/+$/, '')).filter(Boolean)];
+  return o && allowed.includes(o) ? Object.assign({}, corsOf(env, null, o), { 'Access-Control-Allow-Origin': o }) : null;
 }
 const mpFail = (error, status, message) => json({ ok: false, error, message }, status);
 
@@ -627,6 +629,11 @@ async function route(req, env) {
   if (open) return mantarRedeem(req, env, b, path.endsWith('/verify'), open);
 
   if (path.startsWith('/api/npass/')) return NEX.handle(path, req, env, b);
+  if (path.startsWith('/api/timer-reward/')) {
+    const u = await auth(req, env);
+    if (!u) return fail('Oturum geçersiz.', 401);
+    return TIMER_REWARDS.handle(path, req, env, u.id, b);
+  }
   if (path === '/api/init') return init(req, env);
   if (path.startsWith('/api/admin/')) {
     const ip = req.headers.get('CF-Connecting-IP') || 'x';
@@ -662,8 +669,8 @@ async function route(req, env) {
 }
 
 /* ===== Modüller (Nexus Pass, Nexus hediye kartı, FOREVYE ID) ===== */
-const CTX = { appAuth: (...a) => IDENT.appAuth(...a), json, fail, sha256hex, rndStr, eq, nowSec, addLog, rlBump, rlCount, tooMany, toInt, auth, AB, CFG, stamp, cardOk, ensureCards };
-const NEX = makeNexus(CTX), IDENT = makeIdentity(CTX);
+const CTX = { today, appAuth: (...a) => IDENT.appAuth(...a), json, fail, sha256hex, rndStr, rndInt, eq, nowSec, addLog, rlBump, rlCount, tooMany, toInt, auth, AB, CFG, stamp, cardOk, ensureCards };
+const NEX = makeNexus(CTX), IDENT = makeIdentity(CTX), TIMER_REWARDS = makeTimerRewards(CTX);
 /* FOREVYE ID'ye erişebilen adresler: ID_ORIGIN (virgülle) + MARKET_ORIGIN. Hiçbiri yoksa tarayıcıdan okunamaz. Çerez yok, kimlik Authorization başlığında. */
 function idCors(req, env) {
   const o = req.headers.get('Origin') || '', ok = [...String(env.ID_ORIGIN || '').split(','), ...marketOrigins(env)].map(x => x.trim().replace(/\/+$/, '')).filter(Boolean);
