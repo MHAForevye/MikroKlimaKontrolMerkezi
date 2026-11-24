@@ -459,9 +459,13 @@ export function makeIdentity(c) {
     const configured = String(env.ID_REDIRECTS || '').split(',').map(x => x.trim()).filter(Boolean)
       .map(x => { const i = x.indexOf('='); return [x.slice(0, i), x.slice(i + 1)]; })
       .filter(x => x[0] === app).map(x => x[1]);
-    // Zamanlayıcı'nın sabit GitHub Pages callback'i güvenli allowlist'e gömülüdür;
-    // diğer uygulamaların ID_REDIRECTS kayıtlarına dokunulmaz.
-    if (app === 'zamanlayici') configured.push('https://frovyes.github.io/zamanlayici/');
+    // Zamanlayıcı iki ayrı GitHub hesabında yayınlanıyor. İki callback de
+    // tam URL ile allowlist'e eklenir; *.github.io gibi joker eşleşme yoktur.
+    // Diğer uygulamaların ID_REDIRECTS kayıtlarına dokunulmaz.
+    if (app === 'zamanlayici') configured.push(
+      'https://frovyes.github.io/zamanlayici/',
+      'https://mhaforevye.github.io/zamanlayici/'
+    );
     return [...new Set(configured)];
   };
   function checkApp(env, b) {
