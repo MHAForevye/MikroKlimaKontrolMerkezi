@@ -455,10 +455,17 @@ export function makeIdentity(c) {
      2) ID sitesi (oturum açıkken) POST /identity/authorize → tek kullanımlık kod (60 sn) → tarayıcı redirect?code=..&state=.. adresine döner
      3) Uygulama POST /identity/token/exchange {code, verifier, app, redirect, tokens?} → kullanıcı kimliği (+ isteğe bağlı uygulamaya özel jetonlar)
      redirect adresleri yalnızca ID_REDIRECTS içinde (app=adres, virgülle) tam eşleşirse kabul edilir. */
+  const PINNED_REDIRECTS = [
+    ['sanal-banka', 'https://forevye-nexus.forevyenexus.workers.dev/api/auth/id/callback'],
+    ['nexus-pass', 'https://mhaforevye.github.io/nexus-pass/']
+  ];
   const redirectsOf = (env, app) => {
     const configured = String(env.ID_REDIRECTS || '').split(',').map(x => x.trim()).filter(Boolean)
       .map(x => { const i = x.indexOf('='); return [x.slice(0, i), x.slice(i + 1)]; })
       .filter(x => x[0] === app).map(x => x[1]);
+    // SABİTLENMİŞ ADRESLER: panelde ID_REDIRECTS girilmese / silinse / yanlış yere girilse de bu adresler HER ZAMAN izinlidir.
+    // Yeni bir uygulama veya adres eklemek için aşağıdaki listeye satır ekle (tam adres, sonunda / dahil aynen).
+    for (const [a, u] of PINNED_REDIRECTS) if (a === app) configured.push(u);
     // Zamanlayıcı iki ayrı GitHub hesabında yayınlanıyor. İki callback de
     // tam URL ile allowlist'e eklenir; *.github.io gibi joker eşleşme yoktur.
     // Diğer uygulamaların ID_REDIRECTS kayıtlarına dokunulmaz.

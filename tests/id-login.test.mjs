@@ -203,3 +203,17 @@ test('Zamanlayıcı: iki ayrı GitHub Pages hesabı için tam callback allowlist
     assert.equal(bad.j.code, 'BAD_REDIRECT', 'izin dışı callback reddedilir: ' + redirect);
   }
 });
+
+test('Sabitlenmiş yönlendirme: panelde ID_REDIRECTS olmasa da sanal-banka ve nexus-pass çalışır', { skip }, async () => {
+  const { call, user, env } = await setup(), u = await mkUser(env, call);
+  delete env.ID_REDIRECTS;   // panelde silinmiş / hiç girilmemiş gibi
+  for (const app of [
+    { app: 'sanal-banka', redirect: 'https://forevye-nexus.forevyenexus.workers.dev/api/auth/id/callback' },
+    { app: 'nexus-pass', redirect: 'https://mhaforevye.github.io/nexus-pass/' }
+  ]) {
+    const info = await call('/identity/authorize/info', app, u.H);
+    assert.equal(info.s, 200, app.app + ' sabit adresle izinli olmalı');
+  }
+  const bad = await call('/identity/authorize/info', { app: 'sanal-banka', redirect: 'https://evil.example/cb' }, u.H);
+  assert.equal(bad.j.code, 'BAD_REDIRECT');
+});

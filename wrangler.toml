@@ -3,6 +3,9 @@ name = "mikroklimakontrolmerkezi"
 main = "worker/index.js"
 compatibility_date = "2025-11-01"
 
+# ÖNEMLİ: Panelden elle eklenen değişkenler (ID_REDIRECTS vb.) her deploy'da silinmesin.
+keep_vars = true
+
 [assets]
 directory = "."                     # siteyi bu klasörden sunar (gizlenecekler .assetsignore'da)
 run_worker_first = ["/api/*", "/identity/*"]   # sadece /api/* ve /identity/* Worker'a gider, gerisi statik dosya
@@ -17,7 +20,7 @@ database_id = "a4576ecf-eead-4f1a-9cbf-ae0f6f79ccc6"   # npx wrangler d1 create 
 # Mağaza ayrı sitede (forevye-market reposu). Hesaplı uçlara sadece bu adres(ler) erişebilir; virgülle ayır, sadece alan adı, sonunda / yok.
 # Panelden de verilebilir: Workers > mikroklimakontrolmerkezi > Settings > Variables.  Boşsa hesaplı uçlar kapalı kalır.
 [vars]
-EMAIL_FROM = "FOREVYE ID <SENIN-DOGRULANMIS-ADRESIN@gmail.com>"   # Brevo > Senders bölümünde doğrulanmış adres
+EMAIL_FROM = "FOREVYE ID <forevye@gmail.com>"   # Brevo > Senders bölümünde doğrulanmış adres (artık gerçek adres: deploy panel değerini bozmaz)
 MARKET_ORIGIN = "https://mhaforevye.github.io,https://frovyes.github.io"
 ZP_ORIGIN = "https://frovyes.github.io,https://mhaforevye.github.io"
 NEXUS_BANK_API_URL = "https://forevye-nexus.forevyenexus.workers.dev"
@@ -25,6 +28,8 @@ NEXUS_BANK_API_URL = "https://forevye-nexus.forevyenexus.workers.dev"
 # ID_SITE_URL tam sayfayi belirtir; ID_ORIGIN ise CORS icin yalnizca origin'dir.
 ID_ORIGIN = "https://mhaforevye.github.io"
 ID_SITE_URL = "https://mhaforevye.github.io/forevye-id/"
+# "FOREVYE ID ile giriş" izinli dönüş adresleri (uygulama=adres, virgülle). Aynı adresler worker/identity.js içinde de sabit (PINNED_REDIRECTS).
+ID_REDIRECTS = "sanal-banka=https://forevye-nexus.forevyenexus.workers.dev/api/auth/id/callback,nexus-pass=https://mhaforevye.github.io/nexus-pass/"
 # Nexus Pass, Zamanlayıcı ve kristal hesabı kullanan diğer Forevye siteleri MARKET_ORIGIN listesine eklenir (virgülle, sadece alan adı). Zamanlayıcı API CORS erişimi iki GitHub hesabını da kapsar: frovyes.github.io ve mhaforevye.github.io. Örnek:
 #   MARKET_ORIGIN = "https://mhaforevye.github.io,https://KULLANICI.github.io"
 # FOREVYE ID arayüzünün adresi (e-posta/parola kimliği): ID_ORIGIN = "https://KULLANICI.github.io"
