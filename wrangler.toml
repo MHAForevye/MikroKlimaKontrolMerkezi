@@ -20,6 +20,10 @@ database_id = "a4576ecf-eead-4f1a-9cbf-ae0f6f79ccc6"   # npx wrangler d1 create 
 EMAIL_FROM = "FOREVYE ID <SENIN-DOGRULANMIS-ADRESIN@gmail.com>"   # Brevo > Senders bölümünde doğrulanmış adres
 MARKET_ORIGIN = "https://mhaforevye.github.io,https://frovyes.github.io"
 ZP_ORIGIN = "https://frovyes.github.io,https://mhaforevye.github.io"
+# FOREVYE ID arayuzu: bu repo mhaforevye.github.io/forevye-id/ altinda yayinlaniyor.
+# ID_SITE_URL tam sayfayi belirtir; ID_ORIGIN ise CORS icin yalnizca origin'dir.
+ID_ORIGIN = "https://mhaforevye.github.io"
+ID_SITE_URL = "https://mhaforevye.github.io/forevye-id/"
 # Nexus Pass, Zamanlayıcı ve kristal hesabı kullanan diğer Forevye siteleri MARKET_ORIGIN listesine eklenir (virgülle, sadece alan adı). Zamanlayıcı API CORS erişimi iki GitHub hesabını da kapsar: frovyes.github.io ve mhaforevye.github.io. Örnek:
 #   MARKET_ORIGIN = "https://mhaforevye.github.io,https://KULLANICI.github.io"
 # FOREVYE ID arayüzünün adresi (e-posta/parola kimliği): ID_ORIGIN = "https://KULLANICI.github.io"

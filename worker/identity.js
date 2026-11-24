@@ -553,10 +553,20 @@ export function makeIdentity(c) {
       const key = m + ' ' + path;
       switch (key) {
         case 'GET /identity/client-config': {
+          // FOREVYE ID Pages deposu mhaforevye hesabında yayınlanıyor.
+          // Açık Wrangler değişkenleri önceliklidir; bunlar unutulsa bile giriş butonu boşa düşmesin.
+          const defaultIdUrl = 'https://mhaforevye.github.io/forevye-id/';
           const explicit = String(env.ID_SITE_URL || '').trim();
           const origin = String(env.ID_ORIGIN || '').split(',').map(x => x.trim()).find(Boolean) || '';
-          const idUrl = explicit || (origin ? origin.replace(/\/+$/, '') + '/forevye-id/' : '');
-          if (!/^https:\/\//i.test(idUrl)) return json({ code: 'ID_SITE_NOT_CONFIGURED', message: 'FOREVYE ID web adresi sunucuda tanımlı değil.' }, 503);
+          const candidate = explicit || (origin ? origin.replace(/\/+$/, '') + '/forevye-id/' : defaultIdUrl);
+          let idUrl;
+          try {
+            const parsed = new URL(candidate);
+            if (parsed.protocol !== 'https:' || parsed.username || parsed.password) throw new Error('invalid');
+            idUrl = parsed.href.endsWith('/') ? parsed.href : parsed.href + '/';
+          } catch (_) {
+            return json({ code: 'ID_SITE_CONFIG_INVALID', message: 'FOREVYE ID adresi sunucu yapılandırmasında geçersiz.' }, 503);
+          }
           return json({ ok: true, idUrl });
         }
         case 'POST /identity/oauth/google': return await H_.googleLogin(env, req, b);

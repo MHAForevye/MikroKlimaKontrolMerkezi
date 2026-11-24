@@ -301,3 +301,36 @@ test('FOREVYE ID web adresi sabit GitHub hesabina baglanmadan sunucu yapilandirm
   const d = await r.json();
   assert.equal(d.idUrl, 'https://mhaforevye.github.io/forevye-id/');
 });
+
+
+test('FOREVYE ID web adresi Wrangler degiskenleri olmadan da varsayilan Pages adresini verir', { skip }, async () => {
+  const { env } = await setup();
+  env.ID_ORIGIN = '';
+  env.ID_SITE_URL = '';
+  env.ZP_ORIGIN = 'https://frovyes.github.io,https://mhaforevye.github.io';
+  const mod = await import('../worker/index.js');
+  for (const origin of ['https://frovyes.github.io', 'https://mhaforevye.github.io']) {
+    const r = await mod.default.fetch(new Request('https://worker.test/identity/client-config', {
+      method: 'GET', headers: { Origin: origin }
+    }), env);
+    assert.equal(r.status, 200);
+    const d = await r.json();
+    assert.equal(d.idUrl, 'https://mhaforevye.github.io/forevye-id/');
+  }
+});
+
+test('FOREVYE ID acik sayfa ayari ID_SITE_URL ile override edilir ve HTTPS zorunludur', { skip }, async () => {
+  const { env } = await setup();
+  env.ID_SITE_URL = 'https://mhaforevye.github.io/forevye-id/';
+  const mod = await import('../worker/index.js');
+  let r = await mod.default.fetch(new Request('https://worker.test/identity/client-config', {
+    method: 'GET', headers: { Origin: 'https://frovyes.github.io' }
+  }), env);
+  assert.equal(r.status, 200);
+  assert.equal((await r.json()).idUrl, 'https://mhaforevye.github.io/forevye-id/');
+  env.ID_SITE_URL = 'http://mhaforevye.github.io/forevye-id/';
+  r = await mod.default.fetch(new Request('https://worker.test/identity/client-config', {
+    method: 'GET', headers: { Origin: 'https://frovyes.github.io' }
+  }), env);
+  assert.equal(r.status, 503);
+});
