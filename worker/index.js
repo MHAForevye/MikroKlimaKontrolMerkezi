@@ -630,9 +630,36 @@ async function route(req, env) {
 
   if (path.startsWith('/api/npass/')) return NEX.handle(path, req, env, b);
   if (path.startsWith('/api/timer-reward/')) {
-    const u = await auth(req, env);
-    if (!u) return fail('Oturum geçersiz.', 401);
-    return TIMER_REWARDS.handle(path, req, env, u.id, b);
+    // FOREVYE ID oturumu önceliklidir; eski ID.ANAHTAR istemcileri geriye dönük desteklenir.
+    const direct = await auth(req, env);
+    if (direct) {
+      if (path === '/api/timer-reward/link/status') return json({ ok: true, linked: true, siteId: direct.id, legacy: true });
+      return TIMER_REWARDS.handle(path, req, env, direct.id, b);
+    }
+
+    const app = await IDENT.appAuth(env, req, 'zamanlayici');
+    if (!app) return fail('FOREVYE ID oturumu geçersiz. Yeniden giriş yap.', 401);
+
+    // Nexus Pass ile daha önce eşleştirilmiş Kristal hesabını otomatik devral.
+    await env.DB.prepare('CREATE TABLE IF NOT EXISTS np_links (uid TEXT PRIMARY KEY, site_id TEXT NOT NULL UNIQUE, at INTEGER NOT NULL)').run();
+    if (path === '/api/timer-reward/link/status') {
+      let link = await env.DB.prepare('SELECT site_id FROM np_links WHERE uid=?').bind(app.uid).first();
+      return json({ ok: true, linked: !!link, siteId: link ? link.site_id : null, reused: !!link });
+    }
+    if (path === '/api/timer-reward/link') {
+      const m = /^(\d{8})\.([A-Za-z0-9_-]{20,64})$/.exec(String(b.hesap || '').trim());
+      const wallet = m && await auth(new Request('https://internal.invalid/', { headers: { Authorization: 'Bearer ' + m[1] + '.' + m[2] } }), env);
+      if (!wallet) return fail('Kristal hesap bilgisi doğrulanamadı.', 400);
+      const prior = await env.DB.prepare('SELECT site_id FROM np_links WHERE uid=?').bind(app.uid).first();
+      if (prior) return fail('Bu FOREVYE ID hesabına zaten bir Kristal hesabı bağlı.', 409);
+      try {
+        await env.DB.prepare('INSERT INTO np_links(uid,site_id,at) VALUES(?,?,?)').bind(app.uid, wallet.id, Date.now()).run();
+      } catch (_) { return fail('Bu Kristal hesabı başka bir FOREVYE ID hesabına bağlı.', 409); }
+      return json({ ok: true, linked: true, siteId: wallet.id });
+    }
+    const link = await env.DB.prepare('SELECT site_id FROM np_links WHERE uid=?').bind(app.uid).first();
+    if (!link) return json({ ok: false, code: 'no_crystal_account', err: 'Bir Kristal hesabını bir kez eşleştirmen gerekiyor.' }, 409);
+    return TIMER_REWARDS.handle(path, req, env, link.site_id, b);
   }
   if (path === '/api/init') return init(req, env);
   if (path.startsWith('/api/admin/')) {
@@ -673,7 +700,7 @@ const CTX = { today, appAuth: (...a) => IDENT.appAuth(...a), json, fail, sha256h
 const NEX = makeNexus(CTX), IDENT = makeIdentity(CTX), TIMER_REWARDS = makeTimerRewards(CTX);
 /* FOREVYE ID'ye erişebilen adresler: ID_ORIGIN (virgülle) + MARKET_ORIGIN. Hiçbiri yoksa tarayıcıdan okunamaz. Çerez yok, kimlik Authorization başlığında. */
 function idCors(req, env) {
-  const o = req.headers.get('Origin') || '', ok = [...String(env.ID_ORIGIN || '').split(','), ...marketOrigins(env)].map(x => x.trim().replace(/\/+$/, '')).filter(Boolean);
+  const o = req.headers.get('Origin') || '', ok = [...String(env.ID_ORIGIN || '').split(','), ...marketOrigins(env), ...String(env.ZP_ORIGIN || '').split(',')].map(x => x.trim().replace(/\/+$/, '')).filter(Boolean);
   if (!o || !ok.includes(o)) return null;
   return { 'Access-Control-Allow-Origin': o, 'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Max-Age': '86400', 'Vary': 'Origin' };
 }

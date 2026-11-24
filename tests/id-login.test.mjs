@@ -23,7 +23,7 @@ function makeEnv() {
     },
     async batch(sts) { const out = []; for (const s of sts) out.push(await s.run()); return out; }
   };
-  return { DB: D1, ADMIN_TOKEN: 'x'.repeat(24), NEXUS_SECRET: 'n'.repeat(32), __mail: [], MARKET_ORIGIN: 'https://pass.example', ID_ORIGIN: 'https://id.example', GOOGLE_CLIENT_ID: 'cid.apps.googleusercontent.com', ID_REDIRECTS: 'sanal-banka=https://nx.example/api/auth/id/callback,nexus-pass=https://pass.example/nexus-pass/', db };
+  return { DB: D1, ADMIN_TOKEN: 'x'.repeat(24), NEXUS_SECRET: 'n'.repeat(32), __mail: [], MARKET_ORIGIN: 'https://pass.example', ID_ORIGIN: 'https://id.example', ZP_ORIGIN: 'https://frovyes.github.io', GOOGLE_CLIENT_ID: 'cid.apps.googleusercontent.com', ID_REDIRECTS: 'sanal-banka=https://nx.example/api/auth/id/callback,nexus-pass=https://pass.example/nexus-pass/', db };
 }
 async function setup() {
   const mod = await import('../worker/index.js'), env = makeEnv();
@@ -164,4 +164,33 @@ test('npass ↔ ID: bağsız hesap 409; kristal hesabı bağlanınca bakiye ve a
   assert.equal((await call('/api/npass/unlink', {}, T)).j.linked, false);
   assert.equal((await call('/api/npass/me', {}, T)).s, 409);
   assert.equal((await call('/api/npass/link', { hesap: pair }, T2)).j.linked, true, 'ayrılınca başkası bağlayabilir');
+});
+
+
+const TIMERAPP = { app: 'zamanlayici', redirect: 'https://frovyes.github.io/zamanlayici/' };
+test('Zamanlayıcı: FOREVYE ID PKCE girişinde tek onay, bağlı Kristal hesabını otomatik kullanır', { skip }, async () => {
+  const ctx = await setup(), { call, user, env } = ctx, u = await mkUser(env, call);
+  const v = verifier(), a = await authorize(call, u.H, TIMERAPP, v, 'timer-state-1234');
+  assert.equal(a.r.s, 200, 'zamanlayici app ve sabit callback allowlistte');
+  const info = await call('/identity/authorize/info', TIMERAPP, u.H);
+  assert.equal(info.j.connected, true, 'ilk izin sonrası sonraki girişler sessizce onaylanabilir');
+  const preflight = await call('/identity/token/exchange', {}, {
+    Origin: 'https://frovyes.github.io',
+    'Access-Control-Request-Method': 'POST',
+    'Access-Control-Request-Headers': 'content-type'
+  }, 'OPTIONS');
+  assert.equal(preflight.s, 204, 'Zamanlayıcı kökeni ID token exchange CORS listesinde');
+  const ex = await call('/identity/token/exchange', { code: a.code, verifier: v, ...TIMERAPP });
+  assert.equal(ex.s, 200); assert.ok(ex.j.accessToken && ex.j.refreshToken);
+  const crystal = await user(200);
+  const status0 = await call('/api/timer-reward/link/status', {}, { Authorization: 'Bearer ' + ex.j.accessToken });
+  assert.equal(status0.s, 200); assert.equal(status0.j.linked, false);
+  const linked = await call('/api/timer-reward/link', { hesap: crystal.h.Authorization.slice(7) }, { Authorization: 'Bearer ' + ex.j.accessToken });
+  assert.equal(linked.s, 200); assert.equal(linked.j.linked, true);
+  const status1 = await call('/api/timer-reward/link/status', {}, { Authorization: 'Bearer ' + ex.j.accessToken });
+  assert.equal(status1.j.linked, true);
+  const state = await call('/api/timer-reward/state', {}, { Authorization: 'Bearer ' + ex.j.accessToken });
+  assert.equal(state.s, 200); assert.equal(state.j.task.balance, 200);
+  const spin = await call('/api/timer-reward/spin', {}, { Authorization: 'Bearer ' + ex.j.accessToken });
+  assert.equal(spin.s, 200); assert.equal(spin.j.ok, true);
 });

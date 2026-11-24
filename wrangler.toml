@@ -25,7 +25,7 @@ ZP_ORIGIN = "https://frovyes.github.io"
 # FOREVYE ID arayüzünün adresi (e-posta/parola kimliği): ID_ORIGIN = "https://KULLANICI.github.io"
 # Google ile giriş: GOOGLE_CLIENT_ID = "....apps.googleusercontent.com" (herkese açık değer; Google Cloud → OAuth istemcisi, yetkili JavaScript kaynağı = ID sitesi)
 # "FOREVYE ID ile giriş" yönlendirme adresleri (uygulama=tam adres, virgülle; başka adres kabul edilmez). Örnek:
-#   ID_REDIRECTS = "sanal-banka=https://NEXUS.workers.dev/api/auth/id/callback,nexus-pass=https://KULLANICI.github.io/nexus-pass/"
+# Zamanlayıcı callback'i worker/identity.js içinde sabit ve tam URL allowlist'tedir; ID_REDIRECTS değişkeni gerekmez.
 # Ortak posta (ID + Nexus aynı Brevo hesabını buradan kullanır; Nexus /api/ext/mail ile ister) ve altın fiyatı aktarımı (/api/ext/gold) bu Worker'dadır.
 # Gizli değerler (dosyaya yazma): wrangler secret put BREVO_API_KEY (ya da RESEND_API_KEY) | NEXUS_SECRET (= Nexus'taki GIFTCARD_API_SECRET) ; ayrıca [vars] EMAIL_FROM = "FOREVYE ID <no-reply@alanadin.com>"
 

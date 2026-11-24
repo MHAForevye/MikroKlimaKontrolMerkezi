@@ -42,6 +42,7 @@ export const ID_CFG = {
     { id: 'retro-camera', name: 'RETRO CAMERA', scopes: ['kimlik', 'fotograf'] },
     { id: 'mantar-pano', name: 'Mantar Pano', scopes: ['kimlik'] },
     { id: 'nexus-pass', name: 'Nexus Pass', scopes: ['kimlik', 'bakiye'] },
+    { id: 'zamanlayici', name: 'Zamanlayıcı', scopes: ['kimlik', 'bakiye'] },
     { id: 'mikro-klima', name: 'Mikro-Klima', scopes: ['kimlik'] }
   ]
 };
@@ -454,7 +455,15 @@ export function makeIdentity(c) {
      2) ID sitesi (oturum açıkken) POST /identity/authorize → tek kullanımlık kod (60 sn) → tarayıcı redirect?code=..&state=.. adresine döner
      3) Uygulama POST /identity/token/exchange {code, verifier, app, redirect, tokens?} → kullanıcı kimliği (+ isteğe bağlı uygulamaya özel jetonlar)
      redirect adresleri yalnızca ID_REDIRECTS içinde (app=adres, virgülle) tam eşleşirse kabul edilir. */
-  const redirectsOf = (env, app) => String(env.ID_REDIRECTS || '').split(',').map(x => x.trim()).filter(Boolean).map(x => { const i = x.indexOf('='); return [x.slice(0, i), x.slice(i + 1)]; }).filter(x => x[0] === app).map(x => x[1]);
+  const redirectsOf = (env, app) => {
+    const configured = String(env.ID_REDIRECTS || '').split(',').map(x => x.trim()).filter(Boolean)
+      .map(x => { const i = x.indexOf('='); return [x.slice(0, i), x.slice(i + 1)]; })
+      .filter(x => x[0] === app).map(x => x[1]);
+    // Zamanlayıcı'nın sabit GitHub Pages callback'i güvenli allowlist'e gömülüdür;
+    // diğer uygulamaların ID_REDIRECTS kayıtlarına dokunulmaz.
+    if (app === 'zamanlayici') configured.push('https://frovyes.github.io/zamanlayici/');
+    return [...new Set(configured)];
+  };
   function checkApp(env, b) {
     const a = ID_CFG.apps.find(x => x.id === b.app);
     if (!a) throw new E('Bilinmeyen uygulama.', 'BAD_APP', 400);
