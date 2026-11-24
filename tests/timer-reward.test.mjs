@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 
 let DatabaseSync = null;
 try { ({ DatabaseSync } = await import('node:sqlite')); } catch (_) {}
@@ -230,4 +231,73 @@ test('arka plana düşen veya açık kalan eski oturum en fazla 120 sn güvenli 
     const replacement = await call('/api/timer-reward/start', { mode: 'stopwatch' }, auth);
     assert.equal(replacement.status, 200);
   } finally { Date.now = realNow; }
+});
+
+
+test('FOREVYE ID Zamanlayıcı oturumu Nexus Pass np_links kaydındaki Kristal hesabını otomatik kullanır', { skip }, async () => {
+  try {
+    const { env, call } = await setup();
+    const startAt = Date.parse('2026-11-24T08:00:00.000Z'); setNow(startAt);
+    const account = await call('/api/init');
+    const siteId = account.data.id;
+    const idUid = 'usr_0123456789abcdef';
+    const access = 'timer-id-access-token-abcdefghijklmnopqrstuvwxyz';
+    const hash = createHash('sha256').update(access).digest('hex');
+    env.db.prepare("INSERT INTO id_users(id,email,salt,hash,created,apps) VALUES(?,?,?,?,?,?)")
+      .run(idUid, 'id-user@example.test', 'salt', 'hash', startAt, JSON.stringify({ zamanlayici: { connected: true } }));
+    env.db.prepare("INSERT INTO id_app_sessions(id,uid,app,a_hash,r_hash,a_exp,r_exp,created,last) VALUES(?,?,?,?,?,?,?,?,?)")
+      .run('appsession1234567890123456', idUid, 'zamanlayici', hash, 'refresh-hash', startAt + 3600000, startAt + 30 * 86400000, startAt, startAt);
+    env.db.prepare('INSERT INTO np_links(uid,site_id,at) VALUES(?,?,?)').run(idUid, siteId, startAt);
+    const idAuth = { Authorization: 'Bearer ' + access };
+    const state = await call('/api/timer-reward/state', {}, idAuth);
+    assert.equal(state.status, 200);
+    assert.equal(state.data.task.balance, 30);
+    const spun = await call('/api/timer-reward/spin', {}, idAuth);
+    assert.equal(spun.status, 200);
+    assert.equal(spun.data.task.spun, true);
+  } finally { Date.now = realNow; }
+});
+
+test('FOREVYE ID hesabında Nexus Pass Kristal bağı yoksa yedek anahtar istemeden açık hata kodu döner', { skip }, async () => {
+  try {
+    const { env, call } = await setup();
+    const startAt = Date.parse('2026-11-24T08:00:00.000Z'); setNow(startAt);
+    const idUid = 'usr_fedcba9876543210';
+    const access = 'timer-id-access-token-abcdefghijklmnopqrstuvwxyz-2';
+    const hash = createHash('sha256').update(access).digest('hex');
+    env.db.prepare("INSERT INTO id_users(id,email,salt,hash,created,apps) VALUES(?,?,?,?,?,?)")
+      .run(idUid, 'unlinked@example.test', 'salt', 'hash', startAt, JSON.stringify({ zamanlayici: { connected: true } }));
+    env.db.prepare("INSERT INTO id_app_sessions(id,uid,app,a_hash,r_hash,a_exp,r_exp,created,last) VALUES(?,?,?,?,?,?,?,?,?)")
+      .run('appsession2234567890123456', idUid, 'zamanlayici', hash, 'refresh-hash-2', startAt + 3600000, startAt + 30 * 86400000, startAt, startAt);
+    const r = await call('/api/timer-reward/state', {}, { Authorization: 'Bearer ' + access });
+    assert.equal(r.status, 409);
+    assert.equal(r.data.code, 'no_crystal_account');
+    assert.match(r.data.err, /Nexus Pass/);
+  } finally { Date.now = realNow; }
+});
+
+test('FOREVYE ID token alışverişi iki Zamanlayıcı GitHub origininden CORS ile yapılabilir', { skip }, async () => {
+  const { env } = await setup();
+  env.ZP_ORIGIN = 'https://frovyes.github.io,https://mhaforevye.github.io';
+  const mod = await import('../worker/index.js');
+  for (const origin of ['https://frovyes.github.io', 'https://mhaforevye.github.io']) {
+    const r = await mod.default.fetch(new Request('https://worker.test/identity/token/exchange', {
+      method: 'OPTIONS', headers: { Origin: origin, 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type' }
+    }), env);
+    assert.equal(r.status, 204);
+    assert.equal(r.headers.get('Access-Control-Allow-Origin'), origin);
+  }
+});
+
+
+test('FOREVYE ID web adresi sabit GitHub hesabina baglanmadan sunucu yapilandirmasindan alinir', { skip }, async () => {
+  const { env } = await setup();
+  env.ID_ORIGIN = 'https://mhaforevye.github.io';
+  const mod = await import('../worker/index.js');
+  const r = await mod.default.fetch(new Request('https://worker.test/identity/client-config', {
+    method: 'GET', headers: { Origin: 'https://frovyes.github.io' }
+  }), env);
+  assert.equal(r.status, 200);
+  const d = await r.json();
+  assert.equal(d.idUrl, 'https://mhaforevye.github.io/forevye-id/');
 });

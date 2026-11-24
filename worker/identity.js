@@ -552,6 +552,13 @@ export function makeIdentity(c) {
       if ((r = /^\/identity\/apps\/([a-z0-9-]{1,40})$/.exec(path)) && ['PATCH', 'POST', 'DELETE'].includes(m)) return await H_.appEdit(env, req, r[1], m, b);
       const key = m + ' ' + path;
       switch (key) {
+        case 'GET /identity/client-config': {
+          const explicit = String(env.ID_SITE_URL || '').trim();
+          const origin = String(env.ID_ORIGIN || '').split(',').map(x => x.trim()).find(Boolean) || '';
+          const idUrl = explicit || (origin ? origin.replace(/\/+$/, '') + '/forevye-id/' : '');
+          if (!/^https:\/\//i.test(idUrl)) return json({ code: 'ID_SITE_NOT_CONFIGURED', message: 'FOREVYE ID web adresi sunucuda tanımlı değil.' }, 503);
+          return json({ ok: true, idUrl });
+        }
         case 'POST /identity/oauth/google': return await H_.googleLogin(env, req, b);
         case 'POST /identity/oauth/google/link': return await H_.googleLink(env, req, b);
         case 'POST /identity/authorize/info': return await H_.authorizeInfo(env, req, b);

@@ -630,36 +630,21 @@ async function route(req, env) {
 
   if (path.startsWith('/api/npass/')) return NEX.handle(path, req, env, b);
   if (path.startsWith('/api/timer-reward/')) {
-    // FOREVYE ID oturumu önceliklidir; eski ID.ANAHTAR istemcileri geriye dönük desteklenir.
-    const direct = await auth(req, env);
-    if (direct) {
-      if (path === '/api/timer-reward/link/status') return json({ ok: true, linked: true, siteId: direct.id, legacy: true });
-      return TIMER_REWARDS.handle(path, req, env, direct.id, b);
+    // Öncelik FOREVYE ID uygulama oturumu. Nexus Pass ile zaten eşlenmiş
+    // Kristal hesabını aynı ID kullanıcı kimliğinden otomatik devralır.
+    const appSession = await IDENT.appAuth(env, req, 'zamanlayici');
+    if (appSession) {
+      const link = await env.DB.prepare('SELECT site_id FROM np_links WHERE uid=?').bind(appSession.uid).first();
+      if (!link) return fail('Bu FOREVYE ID hesabına henüz Kristal hesabı bağlanmamış. Nexus Pass içinde kullandığın aynı FOREVYE ID hesabıyla giriş yapıp mevcut Kristal hesabı bağlantını kontrol et.', 409, { code: 'no_crystal_account' });
+      const crystalUser = await env.DB.prepare('SELECT id FROM users WHERE id=?').bind(link.site_id).first();
+      if (!crystalUser) return fail('FOREVYE ID hesabının Kristal hesabı bağlantısı bulundu ancak hesap kaydı erişilebilir değil. Bakiye verisi korunarak destek kontrolü gerekiyor.', 409, { code: 'crystal_account_unavailable' });
+      return TIMER_REWARDS.handle(path, req, env, crystalUser.id, b);
     }
-
-    const app = await IDENT.appAuth(env, req, 'zamanlayici');
-    if (!app) return fail('FOREVYE ID oturumu geçersiz. Yeniden giriş yap.', 401);
-
-    // Nexus Pass ile daha önce eşleştirilmiş Kristal hesabını otomatik devral.
-    await env.DB.prepare('CREATE TABLE IF NOT EXISTS np_links (uid TEXT PRIMARY KEY, site_id TEXT NOT NULL UNIQUE, at INTEGER NOT NULL)').run();
-    if (path === '/api/timer-reward/link/status') {
-      let link = await env.DB.prepare('SELECT site_id FROM np_links WHERE uid=?').bind(app.uid).first();
-      return json({ ok: true, linked: !!link, siteId: link ? link.site_id : null, reused: !!link });
-    }
-    if (path === '/api/timer-reward/link') {
-      const m = /^(\d{8})\.([A-Za-z0-9_-]{20,64})$/.exec(String(b.hesap || '').trim());
-      const wallet = m && await auth(new Request('https://internal.invalid/', { headers: { Authorization: 'Bearer ' + m[1] + '.' + m[2] } }), env);
-      if (!wallet) return fail('Kristal hesap bilgisi doğrulanamadı.', 400);
-      const prior = await env.DB.prepare('SELECT site_id FROM np_links WHERE uid=?').bind(app.uid).first();
-      if (prior) return fail('Bu FOREVYE ID hesabına zaten bir Kristal hesabı bağlı.', 409);
-      try {
-        await env.DB.prepare('INSERT INTO np_links(uid,site_id,at) VALUES(?,?,?)').bind(app.uid, wallet.id, Date.now()).run();
-      } catch (_) { return fail('Bu Kristal hesabı başka bir FOREVYE ID hesabına bağlı.', 409); }
-      return json({ ok: true, linked: true, siteId: wallet.id });
-    }
-    const link = await env.DB.prepare('SELECT site_id FROM np_links WHERE uid=?').bind(app.uid).first();
-    if (!link) return json({ ok: false, code: 'no_crystal_account', err: 'Bir Kristal hesabını bir kez eşleştirmen gerekiyor.' }, 409);
-    return TIMER_REWARDS.handle(path, req, env, link.site_id, b);
+    // Eski istemci oturumları geriye dönük uyum için bir süre desteklenir;
+    // yeni arayüz hiçbir yerde bu yedek anahtarı istemez.
+    const u = await auth(req, env);
+    if (!u) return fail('FOREVYE ID oturumu geçersiz veya süresi dolmuş. Yeniden giriş yap.', 401, { code: 'id_session_required' });
+    return TIMER_REWARDS.handle(path, req, env, u.id, b);
   }
   if (path === '/api/init') return init(req, env);
   if (path.startsWith('/api/admin/')) {
