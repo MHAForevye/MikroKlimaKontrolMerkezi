@@ -592,6 +592,134 @@ async function adminDone(env, b) {
   return r.meta.changes ? json({ ok: 1, no }) : fail('Talep bulunamadı.', 404);
 }
 
+
+/* ===== Hesaba bağlı KRS abonelikleri =====
+   Abonelikler eski aktivasyon kodlarından bağımsız olarak Kristal Borsası hesabına bağlanır.
+   Satın alma KRS bakiyesinden atomik düşer; aynı ürünün yeni dönemi mevcut bitişe eklenir.
+   Otomatik yenileme scheduled() cron ile uygulama kapalıyken de yürütülür. */
+const SUBS_SQL = [
+ `CREATE TABLE IF NOT EXISTS subscriptions (
+   id TEXT PRIMARY KEY, uid TEXT NOT NULL, product_id TEXT NOT NULL, app TEXT NOT NULL,
+   tier TEXT NOT NULL, name TEXT NOT NULL, unit_cost INTEGER NOT NULL, duration_sec INTEGER NOT NULL,
+   starts_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, auto_renew INTEGER NOT NULL DEFAULT 0,
+   status TEXT NOT NULL DEFAULT 'active', renew_count INTEGER NOT NULL DEFAULT 0,
+   updated_at INTEGER NOT NULL, UNIQUE(uid, product_id))`,
+ `CREATE INDEX IF NOT EXISTS subscriptions_due ON subscriptions(auto_renew,status,expires_at)`,
+ `CREATE TABLE IF NOT EXISTS subscription_orders (
+   id TEXT PRIMARY KEY, uid TEXT NOT NULL, product_id TEXT NOT NULL, periods INTEGER NOT NULL,
+   cost INTEGER NOT NULL, idem TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE(uid,idem))`,
+ `CREATE INDEX IF NOT EXISTS subscription_orders_uid ON subscription_orders(uid,created_at DESC)`
+];
+const SUBS_READY = new WeakSet();
+async function ensureSubscriptions(env) {
+ if (SUBS_READY.has(env.DB)) return;
+ for (const q of SUBS_SQL) await env.DB.prepare(q).run();
+ SUBS_READY.add(env.DB);
+}
+function subscriptionCatalog() {
+ const out=[];
+ for (const t of CFG.mantar.tiers) out.push({
+  id:'mantar-'+t.id, app:'mantarpano', appName:'Mantar Pano', tier:t.id,
+  name:t.name, price:t.cost, durationSec:CFG.mantar.days*86400,
+  durationLabel:CFG.mantar.days+' gün', image:t.id==='pro'?'/assets/subscriptions/mantar-pro.png':'/assets/subscriptions/mantar-unlimited.png',
+  description:t.id==='pro'?'Gelişmiş pano araçları ve Pro içerikler':'Sınırsız pano deneyimi'
+ });
+ for (const p of CFG.zaman.plans) {
+  const tier=CFG.zaman.tiers.find(x=>x.id===p.tier);
+  out.push({id:'timer-'+p.tier+'-'+p.days,app:'zamanlayici',appName:'Zamanlayıcı',
+   tier:p.tier,name:(tier?.name||'Zamanlayıcı')+' · '+p.days+' gün',price:p.cost,
+   durationSec:p.days*86400,durationLabel:p.days+' gün',
+   image:'/assets/subscriptions/zamanlayici.png',description:'Premium zamanlayıcı özellikleri'});
+ }
+ return out;
+}
+async function subscriptionState(env, uid) {
+ await ensureSubscriptions(env);
+ const rows=(await env.DB.prepare(`SELECT s.*,COALESCE((SELECT SUM(o.periods) FROM subscription_orders o WHERE o.uid=s.uid AND o.product_id=s.product_id),0) AS purchased_periods
+  FROM subscriptions s WHERE s.uid=? ORDER BY s.expires_at DESC`).bind(uid).all()).results||[];
+ const now=nowSec();
+ return rows.map(r=>({...r,active:r.status==='active'&&r.expires_at>now,
+  remainingSec:Math.max(0,r.expires_at-now),autoRenew:!!r.auto_renew}));
+}
+async function subscriptionApi(req,env,u,path,b) {
+ await ensureSubscriptions(env);
+ if(path==='/api/subscriptions/catalog') return json({products:subscriptionCatalog()});
+ if(path==='/api/subscriptions/state') return json({balance:u.bal,subscriptions:await subscriptionState(env,u.id)});
+ if(path==='/api/subscriptions/purchase') {
+  await rlBump(env,'subbuy',u.id);
+  if((await rlCount(env,'subbuy',u.id))>CFG.buyPer10m) return tooMany();
+  const pid=String(b.product_id||''), periods=toInt(b.periods,1,99), idem=String(b.idem||'');
+  if(!/^[A-Za-z0-9_-]{12,80}$/.test(idem)||periods===null) return fail('Geçersiz satın alma isteği.');
+  const p=subscriptionCatalog().find(x=>x.id===pid);
+  if(!p) return fail('Ürün satışta değil.',404);
+  const prior=await env.DB.prepare('SELECT * FROM subscription_orders WHERE uid=? AND idem=?').bind(u.id,idem).first();
+  if(prior) return json({ok:true,replayed:true,balance:(await state(env,u.id)).s.bal,subscriptions:await subscriptionState(env,u.id)});
+  const cost=p.price*periods;
+  if(!Number.isSafeInteger(cost)||cost<=0||cost>100000000) return fail('Tutar geçersiz.');
+  const id='SUB'+rndStr(18,AB), now=nowSec();
+  // changes() koşulu, bakiye yetersizse sipariş ve üyelik kaydı üretmez.
+  try {
+   await env.DB.batch([
+    env.DB.prepare('UPDATE users SET bal=bal-?,spent=spent+? WHERE id=? AND bal>=?').bind(cost,cost,u.id,cost),
+    env.DB.prepare(`INSERT INTO subscription_orders(id,uid,product_id,periods,cost,idem,created_at)
+      SELECT ?,?,?,?,?,?,? WHERE changes()=1`).bind(id,u.id,p.id,periods,cost,idem,now),
+    env.DB.prepare(`INSERT INTO subscriptions(id,uid,product_id,app,tier,name,unit_cost,duration_sec,starts_at,expires_at,auto_renew,status,updated_at)
+      SELECT ?,?,?,?,?,?,?,?,?,?,0,'active',? WHERE EXISTS(SELECT 1 FROM subscription_orders WHERE id=?) 
+      ON CONFLICT(uid,product_id) DO UPDATE SET
+       starts_at=CASE WHEN subscriptions.expires_at>? THEN subscriptions.starts_at ELSE ? END,
+       expires_at=MAX(subscriptions.expires_at,?)+excluded.duration_sec*?,
+       status='active',unit_cost=excluded.unit_cost,updated_at=excluded.updated_at`)
+      .bind(id,u.id,p.id,p.app,p.tier,p.name,p.price,p.durationSec,now,now+p.durationSec*periods,now, id,now,now,now,periods),
+    env.DB.prepare('INSERT INTO log(uid,kind,delta,ref,t) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM subscription_orders WHERE id=?)')
+      .bind(u.id,'subscription',-cost,id,stamp(),id)
+   ]);
+  } catch(e) {
+   if(String(e.message||e).includes('UNIQUE')) {
+    const old=await env.DB.prepare('SELECT id FROM subscription_orders WHERE uid=? AND idem=?').bind(u.id,idem).first();
+    if(old) return json({ok:true,replayed:true,balance:(await state(env,u.id)).s.bal,subscriptions:await subscriptionState(env,u.id)});
+   }
+   throw e;
+  }
+  const fresh=await state(env,u.id);
+  if(!fresh || fresh.s.bal===u.bal) return fail('Yetersiz KRS bakiyesi.',400,fresh);
+  return json({ok:true,balance:fresh.s.bal,subscriptions:await subscriptionState(env,u.id),order:{id,product:p.name,periods,cost}},201);
+ }
+ if(path==='/api/subscriptions/auto-renew') {
+  const pid=String(b.product_id||''), enabled=b.enabled===true?1:0;
+  const r=await env.DB.prepare("UPDATE subscriptions SET auto_renew=?,updated_at=? WHERE uid=? AND product_id=? AND status='active'")
+   .bind(enabled,nowSec(),u.id,pid).run();
+  if(!r.meta.changes) return fail('Aktif üyelik bulunamadı.',404);
+  return json({ok:true,subscriptions:await subscriptionState(env,u.id)});
+ }
+ return fail('Bulunamadı.',404);
+}
+async function processSubscriptionRenewals(env) {
+ await ensureSubscriptions(env);
+ const now=nowSec();
+ const due=(await env.DB.prepare("SELECT * FROM subscriptions WHERE auto_renew=1 AND status='active' AND expires_at<=? ORDER BY expires_at LIMIT 100").bind(now).all()).results||[];
+ let renewed=0,failed=0;
+ for(const x of due) {
+  const ref='REN'+rndStr(16,AB), next=x.expires_at+x.duration_sec;
+  const result=await env.DB.batch([
+   env.DB.prepare(`UPDATE users SET bal=bal-?,spent=spent+? WHERE id=? AND bal>=?
+    AND EXISTS(SELECT 1 FROM subscriptions WHERE id=? AND auto_renew=1 AND status='active' AND expires_at<=?)`).bind(x.unit_cost,x.unit_cost,x.uid,x.unit_cost,x.id,now),
+   env.DB.prepare(`UPDATE subscriptions SET expires_at=?,renew_count=renew_count+1,updated_at=?
+    WHERE id=? AND auto_renew=1 AND status='active' AND expires_at<=? AND EXISTS(SELECT 1 FROM users WHERE id=? AND bal>=0) AND changes()=1`)
+    .bind(next,now,x.id,now,x.uid),
+   env.DB.prepare("INSERT INTO log(uid,kind,delta,ref,t) SELECT ?,?,?,?,? WHERE changes()=1")
+    .bind(x.uid,'subscription_renew',-x.unit_cost,ref,stamp())
+  ]);
+  // Wallet UPDATE changes=0 => subscription untouched; turn off renewal to avoid a tight retry loop.
+  if(result[0]?.meta?.changes) renewed++;
+  else {
+   await env.DB.prepare("UPDATE subscriptions SET auto_renew=0,status='payment_failed',updated_at=? WHERE id=? AND auto_renew=1 AND expires_at<=?")
+    .bind(now,x.id,now).run();
+   failed++;
+  }
+ }
+ return {renewed,failed};
+}
+
 /* ===== Yönlendirme ===== */
 async function route(req, env) {
   const path = new URL(req.url).pathname.replace(/\/+$/, '');
@@ -663,6 +791,10 @@ async function route(req, env) {
     case '/api/buy': return buy(req, env, u, b);
     case '/api/pass/buy': return passBuy(req, env, u, b);
     case '/api/zpass/buy': return zBuy(req, env, u, b);
+    case '/api/subscriptions/catalog':
+    case '/api/subscriptions/state':
+    case '/api/subscriptions/purchase':
+    case '/api/subscriptions/auto-renew': return subscriptionApi(req, env, u, path, b);
     case '/api/redeem': return redeem(req, env, u, b);
     case '/api/card/create': return cardCreate(req, env, u, b);
     case '/api/card/list': return cardListEp(req, env, u);
@@ -687,6 +819,7 @@ function idCors(req, env) {
 const isOpen = req => openOf(new URL(req.url).pathname.replace(/\/+$/, ''));
 
 export default {
+  async scheduled(event, env, ctx) { ctx.waitUntil(processSubscriptionRenewals(env)); },
   async fetch(req, env) {
     const ip = new URL(req.url).pathname.startsWith('/identity/'), ch = ip ? idCors(req, env) : corsHeaders(req, env, isOpen(req));
     try {

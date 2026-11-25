@@ -41,3 +41,7 @@ ID_REDIRECTS = "sanal-banka=https://forevye-nexus.forevyenexus.workers.dev/api/a
 
 # Zamanlayıcı iki Pages deposunda yayınlanabilir; iki origin de ZP_ORIGIN içinde izinlidir.
 # İmzalı jeton için: npx wrangler secret put ZP_SIGN_KEY   (ayrıntı: ZAMANLAYICI-BAGLANTI.md)
+
+# Hesaba bağlı abonelik otomatik yenilemeleri (uygulama kapalıyken de çalışır).
+[triggers]
+crons = ["*/5 * * * *"]
