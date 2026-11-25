@@ -90,4 +90,10 @@ test('abonelik: yenileme anında KRS yetmezse ödeme başarısız olur ve otomat
  const sub=st.j.subscriptions.find(x=>x.product_id===p.id);
  assert.equal(sub.status,'payment_failed');
  assert.equal(sub.autoRenew,false);
+ // Kullanıcı KRS yükledikten sonra aynı aboneliği yeniden otomatik yenilemeye alabilmeli.
+ const retry=await call('/api/subscriptions/auto-renew',{product_id:p.id,enabled:true},h);
+ assert.equal(retry.s,200);
+ const retried=retry.j.subscriptions.find(x=>x.product_id===p.id);
+ assert.equal(retried.status,'active');
+ assert.equal(retried.autoRenew,true);
 });

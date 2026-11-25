@@ -23,6 +23,11 @@ const CFG = {
       { id: 'unl', name: 'Mantar Pano Sınırsız', short: 'Sınırsız', cost: 250 }
     ]
   },
+  // Retro Camera fiyatları ürün sahibi tarafından belirlenir; boş plan listesi satışın kapalı olduğu anlamına gelir.
+  retro: {
+    tiers: [{ id: 'premium', name: 'Retro Camera Premium', short: 'Premium' }],
+    plans: [] // Örn. { tier: 'premium', days: 7, cost: GERCEK_KRS_FIYATI } — fiyat uydurulmaz.
+  },
   // Zamanlayıcı geçişleri: Plus / Premium, 3 ya da 7 gün. Fiyatlar BURADA ve sadece burada belirlenir; tarayıcının gönderdiği tutar hiç kullanılmaz.
   zaman: {
     maxDevices: 2,          // bir kod en fazla kaç cihaza bağlanır
@@ -631,6 +636,14 @@ function subscriptionCatalog() {
    durationSec:p.days*86400,durationLabel:p.days+' gün',
    image:'/assets/subscriptions/zamanlayici.png',description:'Premium zamanlayıcı özellikleri'});
  }
+ for (const p of (CFG.retro?.plans || [])) {
+  const tier=CFG.retro.tiers.find(x=>x.id===p.tier);
+  if (!tier || !Number.isInteger(p.days) || p.days<1 || !Number.isSafeInteger(p.cost) || p.cost<1) continue;
+  out.push({id:'retro-'+p.tier+'-'+p.days,app:'retro',appName:'Retro Camera',tier:p.tier,
+   name:(tier.name||'Retro Camera Premium')+' · '+p.days+' gün',price:p.cost,
+   durationSec:p.days*86400,durationLabel:p.days+' gün',
+   image:'/assets/subscriptions/retro-camera.png',description:'Retro Camera Premium özellikleri'});
+ }
  return out;
 }
 async function subscriptionState(env, uid) {
@@ -686,8 +699,8 @@ async function subscriptionApi(req,env,u,path,b) {
  }
  if(path==='/api/subscriptions/auto-renew') {
   const pid=String(b.product_id||''), enabled=b.enabled===true?1:0;
-  const r=await env.DB.prepare("UPDATE subscriptions SET auto_renew=?,updated_at=? WHERE uid=? AND product_id=? AND status='active'")
-   .bind(enabled,nowSec(),u.id,pid).run();
+  const r=await env.DB.prepare("UPDATE subscriptions SET auto_renew=?,status=CASE WHEN ?=1 AND status='payment_failed' THEN 'active' ELSE status END,updated_at=? WHERE uid=? AND product_id=? AND status IN ('active','payment_failed')")
+   .bind(enabled,enabled,nowSec(),u.id,pid).run();
   if(!r.meta.changes) return fail('Aktif üyelik bulunamadı.',404);
   return json({ok:true,subscriptions:await subscriptionState(env,u.id)});
  }
