@@ -5,6 +5,7 @@
 import { makeNexus } from './nexus.js';
 import { makeIdentity } from './identity.js';
 import { makeTimerRewards } from './timer-rewards.js';
+import { withPinned } from './origins.js';
 
 const CFG = {
   daily: 30,
@@ -440,17 +441,20 @@ function pickOrigin(val, reqOrigin) {
   if (!l.length) return '*';
   return l.length > 1 && l.includes(reqOrigin) ? reqOrigin : l[0];
 }
-const corsOf = (env, spec, reqOrigin) => ({ 'Access-Control-Allow-Origin': pickOrigin(spec && env[spec.origin], reqOrigin), 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-MK-Admin', 'Access-Control-Max-Age': '86400', 'Vary': 'Origin' });
+/* Zamanlayıcı ZP_ORIGIN doluysa: panel değeri + koda gömülü iki GitHub hesabı (worker/origins.js). Boşsa eskisi gibi * (açık uç). */
+const specOrigins = (env, spec) => spec === APPS.zp && String(env.ZP_ORIGIN || '').trim() ? withPinned(env.ZP_ORIGIN).join(',') : (spec && env[spec.origin]);
+const corsOf = (env, spec, reqOrigin) => ({ 'Access-Control-Allow-Origin': pickOrigin(specOrigins(env, spec), reqOrigin), 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-MK-Admin', 'Access-Control-Max-Age': '86400', 'Vary': 'Origin' });
 const withCors = (r, h) => { Object.entries(h).forEach(([k, v]) => r.headers.set(k, v)); return r; };
 
 /* Mağaza ayrı bir sitede (başka alan adı). Hesaplı uçlar (init, sync, buy, redeem, admin...) yalnızca env.MARKET_ORIGIN listesindeki
-   adreslerden okunabilir: virgülle ayrılmış, sadece alan adı (https://KULLANICI.github.io). Boşsa hesaplı uçlar eskisi gibi kapalı kalır.
+   adreslerden okunabilir: virgülle ayrılmış, sadece alan adı (https://KULLANICI.github.io). İki GitHub hesabı (worker/origins.js) her zaman dahildir;
+   MARKET_ORIGIN yalnızca EK adres ekler. Listede olmayan adrese CORS başlığı eklenmez.
    Kimlik başlıkla (Authorization) gider, çerez yok; bu yüzden izin verilen adres dışında kimse yanıtı okuyamaz. */
-const marketOrigins = env => String(env.MARKET_ORIGIN || '').split(',').map(x => x.trim().replace(/\/+$/, '')).filter(Boolean);
+const marketOrigins = env => withPinned(env.MARKET_ORIGIN);   // koda gömülü iki GitHub hesabı HER ZAMAN dahil (worker/origins.js)
 function corsHeaders(req, env, spec) {
   const o = req.headers.get('Origin') || '';
   if (spec) return corsOf(env, spec, o);
-  const allowed = [...marketOrigins(env), ...String(env.ZP_ORIGIN || '').split(',').map(x => x.trim().replace(/\/+$/, '')).filter(Boolean)];
+  const allowed = withPinned(env.MARKET_ORIGIN, env.ZP_ORIGIN);
   return o && allowed.includes(o) ? Object.assign({}, corsOf(env, null, o), { 'Access-Control-Allow-Origin': o }) : null;
 }
 const mpFail = (error, status, message) => json({ ok: false, error, message }, status);
@@ -821,9 +825,10 @@ async function route(req, env) {
 /* ===== Modüller (Nexus Pass, Nexus hediye kartı, FOREVYE ID) ===== */
 const CTX = { today, appAuth: (...a) => IDENT.appAuth(...a), json, fail, sha256hex, rndStr, rndInt, eq, nowSec, addLog, rlBump, rlCount, tooMany, toInt, auth, AB, CFG, stamp, cardOk, ensureCards };
 const NEX = makeNexus(CTX), IDENT = makeIdentity(CTX), TIMER_REWARDS = makeTimerRewards(CTX);
-/* FOREVYE ID'ye erişebilen adresler: ID_ORIGIN (virgülle) + MARKET_ORIGIN. Hiçbiri yoksa tarayıcıdan okunamaz. Çerez yok, kimlik Authorization başlığında. */
+/* FOREVYE ID'ye erişebilen adresler: koda gömülü iki GitHub hesabı (worker/origins.js, HER ZAMAN) + ID_ORIGIN/MARKET_ORIGIN/ZP_ORIGIN (virgülle, ek adresler).
+   Panel değişkenleri boş/yanlış olsa bile FOREVYE ID çalışır. Çerez yok, kimlik Authorization başlığında. */
 function idCors(req, env) {
-  const o = req.headers.get('Origin') || '', ok = [...String(env.ID_ORIGIN || '').split(','), ...marketOrigins(env), ...String(env.ZP_ORIGIN || '').split(',')].map(x => x.trim().replace(/\/+$/, '')).filter(Boolean);
+  const o = req.headers.get('Origin') || '', ok = withPinned(env.ID_ORIGIN, env.MARKET_ORIGIN, env.ZP_ORIGIN);
   if (!o || !ok.includes(o)) return null;
   return { 'Access-Control-Allow-Origin': o, 'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Max-Age': '86400', 'Vary': 'Origin' };
 }

@@ -283,7 +283,9 @@ test('MARKET_ORIGIN: yanıtlar (başarı, 401, 429) izinli adrese okunabilir; ba
   const mod = await import('../worker/index.js'), env = makeEnv();
   const post = (path, origin, headers = {}) => mod.default.fetch(new Request('https://t' + path, { method: 'POST', headers: { 'content-type': 'application/json', 'CF-Connecting-IP': '9.9.9.9', ...(origin ? { Origin: origin } : {}), ...headers }, body: '{}' }), env);
   const none = await post('/api/init', 'https://frovyes.github.io');
-  assert.equal(none.status, 200); assert.equal(none.headers.get('Access-Control-Allow-Origin'), null, 'MARKET_ORIGIN yokken CORS kapalı');
+  assert.equal(none.status, 200); assert.equal(none.headers.get('Access-Control-Allow-Origin'), 'https://frovyes.github.io', 'MARKET_ORIGIN yokken bile koda gömülü GitHub hesabı izinli (worker/origins.js)');
+  const stranger = await post('/api/init', 'https://kotu.example');
+  assert.equal(stranger.headers.get('Access-Control-Allow-Origin'), null, 'MARKET_ORIGIN yokken sabit listede olmayan adrese CORS kapalı');
   env.MARKET_ORIGIN = 'https://frovyes.github.io';
   const a = await post('/api/init', 'https://frovyes.github.io'); const j = await a.json();
   assert.equal(a.headers.get('Access-Control-Allow-Origin'), 'https://frovyes.github.io'); assert.equal(a.headers.get('Vary'), 'Origin');

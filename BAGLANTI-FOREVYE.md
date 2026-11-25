@@ -35,3 +35,5 @@ Kod 60 saniye geçerli ve tek kullanımlıktır; `redirect` adresleri yalnızca 
 3. Mikro-Klima `wrangler.toml` → `ID_REDIRECTS = "sanal-banka=https://<nexus>/api/auth/id/callback,nexus-pass=https://<pass-adresi>/"` (tam adres, sonunda `/` dahil aynen).
 4. Nexus: `ID_URL` (ID arayüzü adresi) doldur, `npx wrangler d1 migrations apply` (0002_forevye_id.sql), deploy. Nexus Pass: `assets/config.js` → `ID_URL`.
 5. Pass adresi `MARKET_ORIGIN` listesinde ve ID adresi `ID_ORIGIN`'de olmalı (CORS).
+
+> **Not (iki GitHub hesabı):** `mhaforevye.github.io` ve `frovyes.github.io` artık `worker/origins.js` içinde koda gömülüdür; `ID_ORIGIN` / `MARKET_ORIGIN` yalnızca ek adres içindir ve panelde silinse bile bu iki hesap çalışır. Ayrıntı ve doğrulama: `HESAPLAR-VE-ADRESLER.md`.

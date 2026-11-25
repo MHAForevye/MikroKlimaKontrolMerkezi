@@ -13,7 +13,7 @@ test('FOREVYE ID registers Zamanlayıcı and pins the exact callback', async () 
 
 test('ID CORS allows the configured Zamanlayıcı origin', async () => {
   const worker = await read('worker/index.js');
-  assert.ok(worker.includes('...String(env.ZP_ORIGIN || \'\').split(\',\')'));
+  assert.ok(worker.includes('withPinned(env.ID_ORIGIN, env.MARKET_ORIGIN, env.ZP_ORIGIN)'));
 });
 
 test('daily reward routes resolve the ID app session to the linked crystal wallet', async () => {

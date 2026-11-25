@@ -1,3 +1,10 @@
+# Bu sürümde değişenler (iki GitHub / iki Cloudflare hesabı: CORS kalıcı düzeltme)
+
+- **Sorun:** FOREVYE ID "Sunucu isteği tamamlanamadı … CORS, https://mhaforevye.github.io kaynağına izin vermiyor" hatası veriyordu. İki GitHub hesabının adresleri yalnızca Cloudflare değişkenlerinde tutuluyordu; yanlış hesaba deploy / panelde silinen değer / eski sürüm CORS'u kapatıyordu.
+- **Çözüm:** `worker/origins.js` (yeni) iki GitHub origin'ini (`mhaforevye`, `frovyes`) koda gömer. `worker/index.js` bunları `/identity/*`, hesaplı Mağaza uçları ve Zamanlayıcı uçlarında HER ZAMAN izinli sayar; `ID_ORIGIN` / `MARKET_ORIGIN` / `ZP_ORIGIN` yalnızca EK adres ekler. Yola kaçmış değerler (`https://x.github.io/forevye-id/`) origin'e indirgenir.
+- **Yeni:** `scripts/verify-live.mjs` + `npm run verify:live` (deploy sonunda kendiliğinden çalışır), `HESAPLAR-VE-ADRESLER.md`, `wrangler.toml` içinde `account_id` koruması (yorum olarak hazır).
+- **Testler:** `tests/origins.test.mjs` (yeni; panel değişkenleri boş/yanlış olsa da iki hesap çalışır, yabancı origin reddedilir). `tests/worker.test.mjs` ve `tests/timer-id-integration.test.mjs` yeni davranışa göre güncellendi.
+
 ## Ortak servisler: posta ve altın fiyatı (Nexus'un yükünü alır)
 - `worker/mail.js`: tek Brevo/Resend gönderici. FOREVYE ID (`identity.js`) bunu kullanır; aynı modül Nexus için `POST /api/ext/mail` (HMAC imzalı, `NEXUS_SECRET`) ucunda da çalışır. Alıcı başına 10 dk'da 5, toplam 80 posta sınırı. Gizli anahtar/gönderen yalnızca burada (BREVO_API_KEY, EMAIL_FROM).
 - `GET /api/ext/gold`: altın fiyatı (gold-api, yedek Yahoo) 60 sn önbelleklenir (`ext_cache` tablosu ilk kullanımda kendiliğinden kurulur); kaynak çökerse 15 dk'ya kadar son fiyat `stale:true` ile döner. Nexus `GOLD_API_URL` ile buradan okur.
