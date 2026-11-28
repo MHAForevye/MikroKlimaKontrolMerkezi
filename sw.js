@@ -1,11 +1,10 @@
 /* Çevrimdışı çalışma: sayfa, kütüphaneler ve fontlar önbelleğe alınır; hava API cevapları ayrı, sınırlı bir önbellekte tutulur.
    Sayfa dosyaları "ağ önce": ağ NET_TIMEOUT içinde cevap vermezse önbellekteki kopya hemen gösterilir (yavaş bağlantıda takılmaz),
    ağ cevabı sonradan gelince önbellek arka planda yenilenir. */
-const V = 'mk-56f4b4c5', AV = 'mk-api-v1';
+const V = 'mk-980e8933', AV = 'mk-api-v1';
 const API_MAX = 60, API_TTL = 24 * 3600e3;   // en fazla 60 kayıt, çevrimdışı yedek olarak en çok 24 saat eski cevap
 const NET_TIMEOUT = 3500;                    // sayfa dosyaları için ağa verilen süre (ms)
-const FONTS = ['patrick-hand-latin-400', 'patrick-hand-latin-ext-400', 'bebas-neue-latin-400', 'bebas-neue-latin-ext-400', 'oswald-latin-300', 'oswald-latin-ext-300', 'oswald-latin-400', 'oswald-latin-ext-400'].map(n => 'fonts/' + n + '-normal.woff2');
-const SHELL = ['./', 'manifest.webmanifest', 'icon.png', 'icon-512.png', 'apple-touch-icon.png', 'badge.png', 'css/style.css?v=55f9da08', 'css/classic.css?v=961cd952', 'css/sade.css?v=fd3c81c7', 'css/fonts.css?v=f1b34a86', 'js/theme.js?v=3ec7b09e', 'js/core.js?v=087c7f10', 'js/app.js?v=dacba17b', 'js/hesap.js?v=98b11734', 'js/kristal.js?v=7d28c2aa', 'js/magaza.js?v=655c5da9', 'css/vitrin.css?v=77c44215', 'js/vitrin.js?v=d6d885f0', 'js/kart.js?v=6da26b8f', 'js/seri.js?v=269c8490', 'lib/chart.umd.min.js', 'lib/leaflet.js', 'lib/leaflet.css', 'gizlilik.html'].concat(FONTS);
+const SHELL = ['./', 'manifest.webmanifest', 'icon.png', 'icon-512.png', 'apple-touch-icon.png', 'badge.png', 'css/style.css?v=3650dafa', 'css/sade.css?v=7d142b00', 'js/theme.js?v=3339fff1', 'js/core.js?v=f80068bd', 'js/app.js?v=96dcfa3a', 'js/kristal.js?v=d17e0541', 'js/icons.js?v=b7764a76', 'lib/chart.umd.min.js', 'lib/leaflet.js', 'lib/leaflet.css', 'gizlilik.html'];
 const API = /(open-meteo\.com|api\.met\.no|wttr\.in|api\.rainviewer\.com|raw\.githubusercontent\.com)/;
 
 self.addEventListener('install', e => {

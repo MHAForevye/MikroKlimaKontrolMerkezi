@@ -84,13 +84,11 @@ Kendi indeksim olduğu için resmî bir uyarının yerini tutmaz, can ve mal gü
 - Türkiye havalimanları için gerçek ölçüm (METAR), son 72 saat
 - Yağış, rüzgâr ve sıcaklık uyarıları ile bildirimler (cihazında üretilir)
 - Kayıtlı konumlar, şehir arama, GPS, rakım
-- Üç görünüm (<mark>**Sade**</mark>, <mark>**Klasik**</mark>, <mark>**Çizgi film**</mark>) ve Açık / Koyu / Sistem renk modu; Ayarlar'da önizleme kartlarıyla seçilir
-- Karne için ayrı sekme, paylaşım kartı (Hava, Karne, Seri) ve 81 il için şehir sayfaları
+- Tema: <mark>**Otomatik / Açık / Koyu**</mark> (Ayarlar > Görünüm ve bildirim). Görünüm: <mark>**Sade**</mark> (varsayılan) ve <mark>**Ayrıntılı**</mark>. Mobilde alt sekme çubuğu, masaüstünde kenar çubuğu.
 - Yedek al / geri yükle, yazı boyutu ve eşik tercihleri
 - Ana ekrana eklenebilir (PWA), çevrimdışı çalışır
 - Sık sorulan sorular ve gizlilik sayfası
-- Seri ateşi: 12 kademeli alev (7, 14, 21... günde değişir), her 7. günde +60 kristal (seriyi sunucu hesaplar)
-- Kristal ödül sistemi (isteğe bağlı): günlük giriş ödülü, Mağaza (Astrophoto Cam paketleri ve Mantar Pano Pro/Sınırsız haftalık kodları) ve hediye kodu. Hava verisinden bağımsızdır, küçük bir Cloudflare Worker + D1 sunucusunda çalışır. **Mağaza ayrı bir sitede ve ayrı repoda (forevye-market)**; bu repo sunucuyu (`worker/`, `schema.sql`), günlük ödül için arayüzsüz kristal bağlantısını (`js/kristal.js`) ve Mağaza'ya giden bağlantıyı (`js/magaza.js`) tutar.
+- Kristal ödül sistemi (isteğe bağlı, Ayarlar'da gizli): günlük giriş ödülü, Mağaza ve hediye kodu. Hava verisinden bağımsızdır, küçük bir Cloudflare Worker + D1 sunucusunda çalışır.
 
 ## <img src="docs/h-08.svg" alt="Neler yok">
 
@@ -124,8 +122,10 @@ index.html, gizlilik.html, css/, lib/, fonts/, sw.js, manifest, ikonlar   yayın
 js/core.js    saf hesaplar: mikro-klima skoru, medyan/ortalama, HTML kaçışı, yağış zamanı (testli)
 js/app.js     arayüz, veri çekme, birleştirme, karne
 js/kristal.js kristal arayüzü
-js/theme.js   tema (sayfa çizilmeden önce çalışır)
-css/sade.css   Sade görünüm (varsayılan). Klasik ve Çizgi film görünümleri Ayarlar > Görünüm'den seçilir
+js/theme.js   tema ve görünüm (sayfa çizilmeden önce çalışır)
+css/style.css  tasarım sistemi: renk belirteçleri (açık/koyu), düzen, bileşenler
+css/sade.css   Sade / Ayrıntılı görünüm farkı
+js/icons.js    SVG ikon seti (hava glifleri + arayüz ikonları, emoji yok)
 _headers      güvenlik başlıkları (CSP dahil)
 worker/       /api/* uçları: kristal sunucusu (Cloudflare Worker + D1)
 schema.sql    D1 tabloları
@@ -159,6 +159,8 @@ npm run bump     # css/js değiştirdiysen: ?v= numaralarını ve sw.js önbelle
 npm run check    # bump gerekli mi + testler (değişiklik yapmaz)
 npm run deploy   # bump + testler + wrangler deploy
 ```
+
+İkon eklemek için `js/icons.js` içindeki `UI` (çizgi, 24x24) ya da `WX` (hava, 48x48) tablosuna yaz.
 
 `sw.js` çevrimdışı çalışmayı sağlar. Yeni bir css/js dosyası eklersen `bump-version.mjs` içindeki `TRACKED` listesine ve `sw.js` içindeki `SHELL` listesine ekle.
 
